@@ -7,6 +7,8 @@ export type RoomSnapshot = {
   status: RoomStatus;
   partnerPresent: boolean;
   partnerOnline: boolean;
+  participantPublicId: string;
+  partnerPublicId: string | null;
   partnerPublicKey: string | null;
   partnerSigningKey: string | null;
   participantActive: boolean;
@@ -29,6 +31,11 @@ export function isValidClientId(value: unknown): value is string {
     value.length <= 100 &&
     /^[a-zA-Z0-9_-]+$/.test(value)
   );
+}
+
+export function isValidParticipantPublicId(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
 }
 
 export function isValidRoomId(value: unknown): value is string {

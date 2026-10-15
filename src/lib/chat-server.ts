@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { chatParticipants, chatRooms } from "@/db/schema";
 import type { RoomKind, RoomSnapshot, RoomStatus } from "@/lib/chat";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, asc, eq } from "drizzle-orm";
 
 export async function getRoomSnapshot(
@@ -8,16 +9,18 @@ export async function getRoomSnapshot(
   clientId: string,
   touch = false,
 ): Promise<RoomSnapshot | null> {
+  const accessHash = hashAccessCredential(clientId);
   const [membership] = await db
     .select({
       id: chatParticipants.id,
+      publicId: chatParticipants.publicId,
       leftAt: chatParticipants.leftAt,
     })
     .from(chatParticipants)
     .where(
       and(
         eq(chatParticipants.roomId, roomId),
-        eq(chatParticipants.clientId, clientId),
+        eq(chatParticipants.clientId, accessHash),
       ),
     )
     .limit(1);
@@ -49,6 +52,7 @@ export async function getRoomSnapshot(
   const participants = await db
     .select({
       clientId: chatParticipants.clientId,
+      publicId: chatParticipants.publicId,
       publicKey: chatParticipants.publicKey,
       signingKey: chatParticipants.signingKey,
       leftAt: chatParticipants.leftAt,
@@ -59,7 +63,7 @@ export async function getRoomSnapshot(
     .orderBy(asc(chatParticipants.seat));
 
   const partner = participants.find(
-    (participant) => participant.clientId !== clientId && !participant.leftAt,
+    (participant) => participant.clientId !== accessHash && !participant.leftAt,
   );
   const partnerOnline = Boolean(
     partner && Date.now() - partner.lastSeenAt.getTime() < 15_000,
@@ -69,6 +73,8 @@ export async function getRoomSnapshot(
     id: room.id,
     kind: room.kind as RoomKind,
     status: room.status as RoomStatus,
+    participantPublicId: membership.publicId,
+    partnerPublicId: partner?.publicId ?? null,
     partnerPresent: Boolean(partner),
     partnerOnline,
     partnerPublicKey: partner?.publicKey ?? null,

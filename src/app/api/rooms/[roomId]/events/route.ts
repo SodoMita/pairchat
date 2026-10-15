@@ -7,6 +7,7 @@ import {
 import { isValidClientId, isValidRoomId } from "@/lib/chat";
 import { allowRequest } from "@/lib/rate-limit";
 import { bearerCredential, requestClientAddress } from "@/lib/request-security";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -23,7 +24,8 @@ export async function GET(
   if (!isValidRoomId(roomId) || !isValidClientId(clientId)) {
     return NextResponse.json({ error: "Invalid event stream request." }, { status: 400 });
   }
-  if (!allowRequest(`events:${requestClientAddress(request)}:${clientId}`, 60, 60_000)) {
+  const accessHash = hashAccessCredential(clientId);
+  if (!allowRequest(`events:${requestClientAddress(request)}:${accessHash}`, 60, 60_000)) {
     return NextResponse.json({ error: "Too many stream requests." }, { status: 429 });
   }
 
@@ -33,7 +35,7 @@ export async function GET(
     .where(
       and(
         eq(chatParticipants.roomId, roomId),
-        eq(chatParticipants.clientId, clientId),
+        eq(chatParticipants.clientId, accessHash),
         isNull(chatParticipants.leftAt),
       ),
     )
@@ -54,7 +56,12 @@ export async function GET(
       const send = (event: LiveChatEvent) => {
         if (closed) return;
         try {
-          const payload = event.type === "message" ? event.message : { connected: event.connected };
+          const payload =
+            event.type === "message"
+              ? event.message
+              : event.type === "peer"
+                ? { connected: event.connected }
+                : { senderPublicId: event.senderPublicId, active: event.active };
           const id = event.type === "message" ? `id: ${event.message.id}\n` : "";
           controller.enqueue(
             encoder.encode(
@@ -66,7 +73,7 @@ export async function GET(
         }
       };
 
-      const unsubscribe = subscribeToChatMessages(roomId, clientId, send);
+      const unsubscribe = subscribeToChatMessages(roomId, accessHash, send);
       const close = () => {
         if (closed) return;
         closed = true;

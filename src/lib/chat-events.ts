@@ -4,13 +4,14 @@ export type EncryptedMessageEnvelope = {
   iv: string;
   ciphertext: string;
   signature: string;
-  senderClientId: string;
+  senderPublicId: string;
   createdAt: string;
 };
 
 export type LiveChatEvent =
   | { type: "message"; message: EncryptedMessageEnvelope }
-  | { type: "peer"; connected: boolean };
+  | { type: "peer"; connected: boolean }
+  | { type: "typing"; senderPublicId: string; active: boolean };
 
 type ChatEventListener = (event: LiveChatEvent) => void;
 type ParticipantListeners = Map<string, Set<ChatEventListener>>;
@@ -33,6 +34,25 @@ function notifyPeerState(roomId: string) {
   for (const listeners of participants.values()) {
     for (const listener of listeners) listener({ type: "peer", connected });
   }
+}
+
+export function publishTypingState(
+  roomId: string,
+  senderAccessHash: string,
+  senderPublicId: string,
+  active: boolean,
+) {
+  const participants = registry.get(roomId);
+  if (!participants) return false;
+  let delivered = false;
+  for (const [accessHash, listeners] of participants) {
+    if (accessHash === senderAccessHash) continue;
+    delivered = true;
+    for (const listener of listeners) {
+      listener({ type: "typing", senderPublicId, active });
+    }
+  }
+  return delivered;
 }
 
 export function publishChatMessage(

@@ -431,6 +431,7 @@ function ChatScreen({
   sending,
   copied,
   relayReady,
+  partnerTyping,
   safetyCode,
   conversations,
   t,
@@ -452,6 +453,7 @@ function ChatScreen({
   sending: boolean;
   copied: boolean;
   relayReady: boolean;
+  partnerTyping: boolean;
   safetyCode: string;
   conversations: LocalConversation[];
   t: Translator;
@@ -468,6 +470,7 @@ function ChatScreen({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const localConversation = conversations.find((item) => item.roomId === room.id);
   const [confirmAction, setConfirmAction] = useState<"leave" | "next" | null>(null);
   const waiting = room.status === "waiting";
   const ended = room.status === "ended" || !room.participantActive;
@@ -578,7 +581,8 @@ function ChatScreen({
                   ) : (
                     <div className="space-y-4">
                       {messages.map((message) => {
-                        const mine = message.senderClientId === clientId;
+                        const mine = message.senderPublicId === room.participantPublicId ||
+                          (!message.senderPublicId && message.senderClientId === localConversation?.clientId);
                         return (
                           <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`}>
                             {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
@@ -604,7 +608,8 @@ function ChatScreen({
                   )}
                   <div className="space-y-4 pt-4">
                     {messages.map((message) => {
-                      const mine = message.senderClientId === clientId;
+                      const mine = message.senderPublicId === room.participantPublicId ||
+                          (!message.senderPublicId && message.senderClientId === localConversation?.clientId);
                       return (
                         <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`}>
                           {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
@@ -618,11 +623,18 @@ function ChatScreen({
                   </div>
                 </>
               )}
+              {partnerTyping && !waiting && !ended && (
+                <div className="mt-5 flex items-center gap-2.5 text-[10px] font-semibold text-[#78847b]" role="status" aria-live="polite">
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-[#edf3e9] text-[#63805a]"><UserRound size={13} /></span>
+                  <span>{t("partnerTyping")}</span>
+                  <span className="typing-indicator" aria-hidden="true"><i /><i /><i /></span>
+                </div>
+              )}
             </div>
 
             <form onSubmit={onSend} className="shrink-0 border-t border-[#ecece7] bg-white p-3 sm:p-4">
               <div className={`flex items-end gap-2 rounded-2xl border bg-[#fafaf7] p-2 ps-4 transition focus-within:border-[#f5a18e] focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,103,71,0.08)] ${waiting || ended || !secureReady ? "border-[#e8e9e4] opacity-60" : "border-[#e2e3dd]"}`}>
-                <textarea ref={composerRef} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={onKeyDown} disabled={waiting || ended || !secureReady || sending} maxLength={1200} rows={1} placeholder={waiting ? t("waitingPlaceholder") : ended ? t("endedPlaceholder") : !secureReady ? t("connecting") : t("writeMessage")} className="max-h-28 min-h-10 flex-1 resize-none bg-transparent py-2 text-[13px] leading-6 text-[#313b38] outline-none placeholder:text-[#aab0ad]" />
+                <textarea ref={composerRef} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={onKeyDown} disabled={waiting || ended || !secureReady} maxLength={1200} rows={1} placeholder={waiting ? t("waitingPlaceholder") : ended ? t("endedPlaceholder") : !secureReady ? t("connecting") : t("writeMessage")} className="max-h-28 min-h-10 flex-1 resize-none bg-transparent py-2 text-[13px] leading-6 text-[#313b38] outline-none placeholder:text-[#aab0ad]" />
                 <button type="submit" disabled={!draft.trim() || waiting || ended || !secureReady || sending} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#ff6747] text-white transition hover:bg-[#f45d3e] disabled:bg-[#d9dcd6]" aria-label={t("sendMessage")}>{sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}</button>
               </div>
               <div className="mt-2 hidden items-center justify-between px-1 text-[9px] font-semibold text-[#abb0ad] sm:flex"><span>{t("keyboardHint")}</span><span>{draft.length}/1200</span></div>
@@ -661,11 +673,14 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   const [busy, setBusy] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>("checking");
   const [relayReady, setRelayReady] = useState(false);
+  const [partnerTyping, setPartnerTyping] = useState(false);
   const [safetyCode, setSafetyCode] = useState("");
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const openedRoomId = useRef<string | null>(null);
+  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSignal = useRef(0);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
 
   useEffect(() => {
@@ -761,6 +776,31 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     };
   }, []);
 
+  const sendTypingSignal = useCallback((active: boolean) => {
+    if (!room || !clientId || !relayReady || room.status !== "active") return;
+    const now = Date.now();
+    if (active && now - lastTypingSignal.current < 800) return;
+    if (active) lastTypingSignal.current = now;
+    void requestJson(`/api/rooms/${room.id}/typing`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${clientId}` },
+      body: JSON.stringify({ active }),
+    }).catch(() => null);
+  }, [clientId, relayReady, room?.id, room?.status]);
+
+  const updateDraft = useCallback((value: string) => {
+    setDraft(value);
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    const active = value.trim().length > 0;
+    sendTypingSignal(active);
+    if (active) {
+      typingTimeout.current = setTimeout(() => {
+        sendTypingSignal(false);
+        typingTimeout.current = null;
+      }, 1_400);
+    }
+  }, [sendTypingSignal]);
+
   const acceptRoom = useCallback((
     nextRoom: RoomSnapshot | null,
     participantId: string,
@@ -792,8 +832,8 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
       const data = await requestJson<{ room: RoomSnapshot }>("/api/match", {
         method: "POST",
+        headers: { Authorization: `Bearer ${participantId}` },
         body: JSON.stringify({
-          clientId: participantId,
           publicKey: serializePublicKey(encryption),
           signingKey: serializeSigningKey(encryption),
         }),
@@ -818,8 +858,8 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
       const keyCommitment = await privateSecretCommitment(secret);
       const data = await requestJson<{ room: RoomSnapshot }>("/api/rooms", {
         method: "POST",
+        headers: { Authorization: `Bearer ${participantId}` },
         body: JSON.stringify({
-          clientId: participantId,
           signingKey: serializeSigningKey(encryption),
           keyCommitment,
         }),
@@ -863,6 +903,8 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         id: existing.roomId,
         kind: existing.kind,
         status: "ended",
+        participantPublicId: existing.publicId ?? "",
+        partnerPublicId: null,
         partnerPresent: false,
         partnerOnline: false,
         partnerPublicKey: null,
@@ -897,16 +939,16 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
               `/api/rooms/${initialRoomId}/keys`,
               {
                 method: "POST",
+                headers: { Authorization: `Bearer ${participantId}` },
                 body: JSON.stringify({
-                  clientId: participantId,
                   signingKey: serializeSigningKey(secureEncryption),
                 }),
               },
             )
           : await requestJson<{ room: RoomSnapshot }>(`/api/rooms/${initialRoomId}/join`, {
               method: "POST",
+              headers: { Authorization: `Bearer ${participantId}` },
               body: JSON.stringify({
-                clientId: participantId,
                 signingKey: serializeSigningKey(secureEncryption),
                 keyCommitment:
                   secureEncryption.mode === "private"
@@ -1005,13 +1047,13 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
           typeof envelope.iv !== "string" ||
           typeof envelope.ciphertext !== "string" ||
           typeof envelope.signature !== "string" ||
-          typeof envelope.senderClientId !== "string" ||
+          typeof envelope.senderPublicId !== "string" ||
           typeof envelope.createdAt !== "string"
         ) return;
         const conversation = loadLocalConversations().find(
           (item) => item.roomId === roomId,
         );
-        const signatureKey = envelope.senderClientId === clientId
+        const signatureKey = envelope.senderPublicId === roomSnapshot.participantPublicId
           ? serializeSigningKey(conversation?.encryption)
           : roomSnapshot.partnerSigningKey;
         const signatureValid = await verifyEnvelopeSignature(
@@ -1025,7 +1067,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         storeMessage(roomId, {
           id: envelope.id,
           body,
-          senderClientId: envelope.senderClientId,
+          senderPublicId: envelope.senderPublicId,
           createdAt: envelope.createdAt,
         });
       } catch {
@@ -1047,8 +1089,29 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         try {
           const peer = JSON.parse(payload) as { connected?: boolean };
           setRelayReady(peer.connected === true);
+          if (!peer.connected) setPartnerTyping(false);
         } catch {
           setRelayReady(false);
+          setPartnerTyping(false);
+        }
+      }
+      if (eventType === "typing") {
+        try {
+          const typing = JSON.parse(payload) as {
+            senderPublicId?: string;
+            active?: boolean;
+          };
+          if (typing.senderPublicId !== roomSnapshot.partnerPublicId) return;
+          setPartnerTyping(typing.active === true);
+          if (typingTimeout.current) clearTimeout(typingTimeout.current);
+          if (typing.active) {
+            typingTimeout.current = setTimeout(() => {
+              setPartnerTyping(false);
+              typingTimeout.current = null;
+            }, 3_500);
+          }
+        } catch {
+          setPartnerTyping(false);
         }
       }
     };
@@ -1091,6 +1154,11 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     void connect();
     return () => {
       setRelayReady(false);
+      setPartnerTyping(false);
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+        typingTimeout.current = null;
+      }
       abort.abort();
     };
   }, [clientId, room?.id, room?.partnerPublicKey, room?.status, screen, storeMessage]);
@@ -1110,7 +1178,8 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     if (currentRoom && clientId) {
       await requestJson(`/api/rooms/${currentRoom.id}`, {
         method: "DELETE",
-        body: JSON.stringify({ clientId }),
+        headers: { Authorization: `Bearer ${clientId}` },
+        body: JSON.stringify({}),
       }).catch(() => null);
       setConversations(setLocalRoomStatus(currentRoom.id, "ended"));
     }
@@ -1134,8 +1203,8 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
       const data = await requestJson<{ room: RoomSnapshot }>("/api/match", {
         method: "POST",
+        headers: { Authorization: `Bearer ${participantId}` },
         body: JSON.stringify({
-          clientId: participantId,
           publicKey: serializePublicKey(encryption),
           signingKey: serializeSigningKey(encryption),
         }),
@@ -1157,6 +1226,11 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     event?.preventDefault();
     const body = draft.trim();
     if (!body || !room || !clientId || !relayReady || !safetyCode || sending) return;
+    sendTypingSignal(false);
+    if (typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+      typingTimeout.current = null;
+    }
     setSending(true);
     setDraft("");
     try {
@@ -1164,17 +1238,18 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         (item) => item.roomId === room.id,
       );
       const key = await getRoomCryptoKey(conversation?.encryption, room);
-      const encrypted = await encryptMessage(key, room.id, clientId, body);
+      const encrypted = await encryptMessage(key, room.id, room.participantPublicId, body);
       const signature = await signEnvelope(conversation?.encryption, room.id, encrypted);
       const envelope: EncryptedMessageEnvelope = { ...encrypted, signature };
       await requestJson<{ envelope: EncryptedMessageEnvelope }>(`/api/rooms/${room.id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ clientId, envelope }),
+        headers: { Authorization: `Bearer ${clientId}` },
+        body: JSON.stringify({ envelope }),
       });
       storeMessage(room.id, {
         id: envelope.id,
         body,
-        senderClientId: clientId,
+        senderPublicId: room.participantPublicId,
         createdAt: envelope.createdAt,
       });
     } catch {
@@ -1183,7 +1258,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     } finally {
       setSending(false);
     }
-  }, [clientId, draft, relayReady, room, safetyCode, sending, storeMessage, t]);
+  }, [clientId, draft, relayReady, room, safetyCode, sendTypingSignal, sending, storeMessage, t]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -1237,7 +1312,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   if (screen === "matching") return <MatchingScreen onCancel={cancelSearch} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDraft={setDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
+    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} partnerTyping={partnerTyping} safetyCode={safetyCode} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
   }
 
   return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} />;

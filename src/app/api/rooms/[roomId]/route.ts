@@ -2,7 +2,8 @@ import { db } from "@/db";
 import { chatParticipants, chatRooms } from "@/db/schema";
 import { isValidClientId, isValidRoomId } from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
-import { bearerCredential, isTrustedJsonMutation, readLimitedJson } from "@/lib/request-security";
+import { bearerCredential, isTrustedJsonMutation } from "@/lib/request-security";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -36,8 +37,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
   const { roomId } = await context.params;
-  const body = await readLimitedJson(request);
-  const clientId = body?.clientId;
+  const clientId = bearerCredential(request);
 
   if (!isValidRoomId(roomId) || !isValidClientId(clientId)) {
     return NextResponse.json({ error: "Invalid room request." }, { status: 400 });
@@ -48,6 +48,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Chat room not found." }, { status: 404 });
   }
 
+  const accessHash = hashAccessCredential(clientId);
   const now = new Date();
   await db.transaction(async (tx) => {
     await tx
@@ -56,7 +57,7 @@ export async function DELETE(
       .where(
         and(
           eq(chatParticipants.roomId, roomId),
-          eq(chatParticipants.clientId, clientId),
+          eq(chatParticipants.clientId, accessHash),
         ),
       );
     await tx

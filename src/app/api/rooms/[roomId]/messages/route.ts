@@ -1,14 +1,19 @@
 import { db } from "@/db";
 import { chatParticipants, chatRooms } from "@/db/schema";
-import { isValidClientId, isValidRoomId } from "@/lib/chat";
+import {
+  isValidClientId,
+  isValidParticipantPublicId,
+  isValidRoomId,
+} from "@/lib/chat";
 import {
   publishChatMessage,
   type EncryptedMessageEnvelope,
 } from "@/lib/chat-events";
 import { allowRequest } from "@/lib/rate-limit";
-import { isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
+import { bearerCredential, isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
 import { claimMessageId } from "@/lib/replay-cache";
 import { verifyServerEnvelopeSignature } from "@/lib/server-signatures";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -16,7 +21,6 @@ export const dynamic = "force-dynamic";
 
 function isEncryptedEnvelope(
   value: unknown,
-  clientId: string,
 ): value is EncryptedMessageEnvelope {
   if (!value || typeof value !== "object") return false;
   const envelope = value as Partial<EncryptedMessageEnvelope>;
@@ -25,7 +29,7 @@ function isEncryptedEnvelope(
     envelope.version === 1 &&
     typeof envelope.id === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(envelope.id) &&
-    envelope.senderClientId === clientId &&
+    isValidParticipantPublicId(envelope.senderPublicId) &&
     typeof envelope.iv === "string" &&
     /^[A-Za-z0-9_-]{16}$/u.test(envelope.iv) &&
     typeof envelope.ciphertext === "string" &&
@@ -48,26 +52,31 @@ export async function POST(
   }
   const { roomId } = await context.params;
   const payload = await readLimitedJson(request);
-  const clientId = payload?.clientId;
+  const clientId = bearerCredential(request);
 
   if (!isValidRoomId(roomId) || !isValidClientId(clientId)) {
     return NextResponse.json({ error: "Invalid message request." }, { status: 400 });
   }
-  if (!isEncryptedEnvelope(payload?.envelope, clientId)) {
+  const accessHash = hashAccessCredential(clientId);
+  if (!isEncryptedEnvelope(payload?.envelope)) {
     return NextResponse.json({ error: "Invalid encrypted envelope." }, { status: 400 });
   }
-  if (!allowRequest(`message:${requestClientAddress(request)}:${roomId}:${clientId}`, 20, 10_000)) {
+  if (!allowRequest(`message:${requestClientAddress(request)}:${roomId}:${accessHash}`, 20, 10_000)) {
     return NextResponse.json({ error: "Too many messages." }, { status: 429 });
   }
 
   const [permission] = await db
-    .select({ roomStatus: chatRooms.status, signingKey: chatParticipants.signingKey })
+    .select({
+      roomStatus: chatRooms.status,
+      signingKey: chatParticipants.signingKey,
+      publicId: chatParticipants.publicId,
+    })
     .from(chatParticipants)
     .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
     .where(
       and(
         eq(chatParticipants.roomId, roomId),
-        eq(chatParticipants.clientId, clientId),
+        eq(chatParticipants.clientId, accessHash),
         isNull(chatParticipants.leftAt),
       ),
     )
@@ -83,6 +92,12 @@ export async function POST(
     return NextResponse.json(
       { error: "This chat is not active." },
       { status: 409 },
+    );
+  }
+  if (permission.publicId !== payload.envelope.senderPublicId) {
+    return NextResponse.json(
+      { error: "Sender identity does not match this participant." },
+      { status: 403 },
     );
   }
   if (!permission.signingKey) {
@@ -106,7 +121,7 @@ export async function POST(
   if (!claimMessageId(roomId, payload.envelope.id)) {
     return NextResponse.json({ error: "Duplicate encrypted message." }, { status: 409 });
   }
-  const delivered = publishChatMessage(roomId, clientId, payload.envelope);
+  const delivered = publishChatMessage(roomId, accessHash, payload.envelope);
   if (!delivered) {
     return NextResponse.json(
       { error: "Encrypted peer is not connected." },

@@ -6,7 +6,9 @@ export const MAX_LOCAL_MESSAGES = 500;
 export type LocalChatMessage = {
   id: string;
   body: string;
-  senderClientId: string;
+  senderPublicId?: string;
+  /** Legacy local-only transcript field; never sent over the network. */
+  senderClientId?: string;
   createdAt: string;
 };
 
@@ -22,6 +24,7 @@ export type ConversationEncryption =
 export type LocalConversation = {
   roomId: string;
   clientId: string;
+  publicId?: string;
   kind: RoomKind;
   status: RoomStatus;
   createdAt: string;
@@ -36,7 +39,8 @@ function isMessage(value: unknown): value is LocalChatMessage {
   return (
     typeof message.id === "string" &&
     typeof message.body === "string" &&
-    typeof message.senderClientId === "string" &&
+    (typeof message.senderPublicId === "string" ||
+      typeof message.senderClientId === "string") &&
     typeof message.createdAt === "string"
   );
 }
@@ -74,6 +78,7 @@ function isConversation(value: unknown): value is LocalConversation {
   return (
     typeof conversation.roomId === "string" &&
     typeof conversation.clientId === "string" &&
+    (conversation.publicId === undefined || typeof conversation.publicId === "string") &&
     (conversation.kind === "random" || conversation.kind === "private") &&
     (conversation.status === "waiting" ||
       conversation.status === "active" ||
@@ -115,6 +120,7 @@ export function saveLocalRoom(
   const next: LocalConversation = {
     roomId: room.id,
     clientId,
+    publicId: room.participantPublicId || existing?.publicId,
     kind: room.kind,
     status: room.status,
     createdAt: existing?.createdAt ?? room.createdAt,

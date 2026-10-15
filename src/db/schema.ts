@@ -6,6 +6,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 export const chatRooms = pgTable(
@@ -33,6 +34,7 @@ export const chatParticipants = pgTable(
       .notNull()
       .references(() => chatRooms.id, { onDelete: "cascade" }),
     clientId: text("client_id").notNull(),
+    publicId: uuid("public_id").notNull().defaultRandom(),
     seat: integer("seat").notNull(),
     publicKey: text("public_key"),
     signingKey: text("signing_key"),
@@ -42,6 +44,7 @@ export const chatParticipants = pgTable(
   },
   (table) => [
     uniqueIndex("chat_participants_room_client_idx").on(table.roomId, table.clientId),
+    uniqueIndex("chat_participants_room_public_id_idx").on(table.roomId, table.publicId),
     uniqueIndex("chat_participants_room_seat_idx").on(table.roomId, table.seat),
     index("chat_participants_client_idx").on(table.clientId),
   ],

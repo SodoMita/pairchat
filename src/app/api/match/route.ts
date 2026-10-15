@@ -4,6 +4,7 @@ import { createRoomId, isValidClientId, isValidEcdhPublicKey, isValidEcdsaPublic
 import { getRoomSnapshot } from "@/lib/chat-server";
 import { allowRequest } from "@/lib/rate-limit";
 import { bearerCredential, isTrustedJsonMutation, readLimitedJson, requestClientAddress } from "@/lib/request-security";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import {
   and,
   asc,
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Too many match requests." }, { status: 429 });
   }
   const body = await readLimitedJson(request);
-  const clientId = body?.clientId;
+  const clientId = bearerCredential(request);
   const publicKey = body?.publicKey;
   const signingKey = body?.signingKey;
 
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid encrypted chat identity." }, { status: 400 });
   }
 
+  const accessHash = hashAccessCredential(clientId);
   const roomId = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(7402181)`);
     await tx.execute(sql`
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
       .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
       .where(
         and(
-          eq(chatParticipants.clientId, clientId),
+          eq(chatParticipants.clientId, accessHash),
           isNull(chatParticipants.leftAt),
           eq(chatRooms.kind, "random"),
           inArray(chatRooms.status, ["waiting", "active"]),
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
         .where(
           and(
             eq(chatParticipants.roomId, existing.roomId),
-            eq(chatParticipants.clientId, clientId),
+            eq(chatParticipants.clientId, accessHash),
           ),
         );
       await tx
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
           isNull(chatParticipants.leftAt),
           isNotNull(chatParticipants.publicKey),
           isNotNull(chatParticipants.signingKey),
-          ne(chatParticipants.clientId, clientId),
+          ne(chatParticipants.clientId, accessHash),
         ),
       )
       .orderBy(asc(chatRooms.createdAt))
@@ -119,7 +121,7 @@ export async function POST(request: NextRequest) {
     if (waiting) {
       await tx.insert(chatParticipants).values({
         roomId: waiting.roomId,
-        clientId,
+        clientId: accessHash,
         seat: 2,
         publicKey,
         signingKey,
@@ -135,7 +137,7 @@ export async function POST(request: NextRequest) {
     await tx.insert(chatRooms).values({ id, kind: "random" });
     await tx.insert(chatParticipants).values({
       roomId: id,
-      clientId,
+      clientId: accessHash,
       seat: 1,
       publicKey,
       signingKey,
@@ -159,7 +161,8 @@ export async function GET(request: NextRequest) {
   if (!isValidClientId(clientId)) {
     return NextResponse.json({ error: "Invalid chat identity." }, { status: 400 });
   }
-  if (!allowRequest(`match-poll:${requestClientAddress(request)}:${clientId}`, 180, 60_000)) {
+  const accessHash = hashAccessCredential(clientId);
+  if (!allowRequest(`match-poll:${requestClientAddress(request)}:${accessHash}`, 180, 60_000)) {
     return NextResponse.json({ error: "Too many polling requests." }, { status: 429 });
   }
 
@@ -169,7 +172,7 @@ export async function GET(request: NextRequest) {
     .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
     .where(
       and(
-        eq(chatParticipants.clientId, clientId),
+        eq(chatParticipants.clientId, accessHash),
         isNull(chatParticipants.leftAt),
         eq(chatRooms.kind, "random"),
         inArray(chatRooms.status, ["waiting", "active"]),

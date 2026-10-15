@@ -8,7 +8,8 @@ import {
 } from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
 import { allowRequest } from "@/lib/rate-limit";
-import { isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
+import { bearerCredential, isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -25,7 +26,7 @@ export async function POST(
   }
   const { roomId } = await context.params;
   const body = await readLimitedJson(request);
-  const clientId = body?.clientId;
+  const clientId = bearerCredential(request);
   const signingKey = body?.signingKey;
   const keyCommitment = body?.keyCommitment;
 
@@ -38,6 +39,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid invite link." }, { status: 400 });
   }
 
+  const accessHash = hashAccessCredential(clientId);
   const outcome = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${roomId}))`);
 
@@ -61,7 +63,7 @@ export async function POST(
       .where(
         and(
           eq(chatParticipants.roomId, roomId),
-          eq(chatParticipants.clientId, clientId),
+          eq(chatParticipants.clientId, accessHash),
         ),
       )
       .limit(1);
@@ -93,7 +95,12 @@ export async function POST(
       return "full" as const;
     }
 
-    await tx.insert(chatParticipants).values({ roomId, clientId, seat: 2, signingKey });
+    await tx.insert(chatParticipants).values({
+      roomId,
+      clientId: accessHash,
+      seat: 2,
+      signingKey,
+    });
     await tx
       .update(chatRooms)
       .set({ status: "active", updatedAt: new Date() })

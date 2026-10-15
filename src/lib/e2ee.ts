@@ -45,7 +45,7 @@ export async function createEcdhCredentials(): Promise<ConversationEncryption> {
   const keyPair = (await crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     true,
-    ["deriveKey"],
+    ["deriveBits"],
   )) as CryptoKeyPair;
   const [privateKey, publicKey] = await Promise.all([
     crypto.subtle.exportKey("jwk", keyPair.privateKey),
@@ -90,7 +90,7 @@ export function envelopeSigningBytes(
       "luma-signed-envelope-v1",
       roomId,
       envelope.id,
-      envelope.senderClientId,
+      envelope.senderPublicId,
       envelope.createdAt,
       envelope.iv,
       envelope.ciphertext,
@@ -161,10 +161,17 @@ async function deriveRandomRoomBits(
 ) {
   if (!partnerPublicKey) throw new Error("Partner encryption key is not ready");
   const partnerJwk = JSON.parse(partnerPublicKey) as JsonWebKey;
+  // Older local credentials were exported with key_ops: ["deriveKey"].
+  // ECDH permissions are local JWK metadata: import the same local scalar
+  // with its actual required usage so existing conversations can derive bits.
+  const privateJwk: JsonWebKey = {
+    ...encryption.privateKey,
+    key_ops: ["deriveBits"],
+  };
   const [privateKey, publicKey] = await Promise.all([
     crypto.subtle.importKey(
       "jwk",
-      encryption.privateKey,
+      privateJwk,
       { name: "ECDH", namedCurve: "P-256" },
       false,
       ["deriveBits"],
@@ -253,24 +260,24 @@ export async function getRoomSafetyCode(
 
 function additionalData(
   roomId: string,
-  envelope: Pick<EncryptedMessageEnvelope, "id" | "senderClientId" | "createdAt" | "version">,
+  envelope: Pick<EncryptedMessageEnvelope, "id" | "senderPublicId" | "createdAt" | "version">,
 ) {
   return encoder.encode(
-    `luma:${envelope.version}:${roomId}:${envelope.id}:${envelope.senderClientId}:${envelope.createdAt}`,
+    `luma:${envelope.version}:${roomId}:${envelope.id}:${envelope.senderPublicId}:${envelope.createdAt}`,
   );
 }
 
 export async function encryptMessage(
   key: CryptoKey,
   roomId: string,
-  senderClientId: string,
+  senderPublicId: string,
   body: string,
 ): Promise<Omit<EncryptedMessageEnvelope, "signature">> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const envelope = {
     version: 1 as const,
     id: crypto.randomUUID(),
-    senderClientId,
+    senderPublicId,
     createdAt: new Date().toISOString(),
   };
   const ciphertext = await crypto.subtle.encrypt(

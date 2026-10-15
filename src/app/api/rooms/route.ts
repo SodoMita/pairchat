@@ -8,7 +8,8 @@ import {
 } from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
 import { allowRequest } from "@/lib/rate-limit";
-import { isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
+import { bearerCredential, isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
+import { hashAccessCredential } from "@/lib/server-credentials";
 import { sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Too many room requests." }, { status: 429 });
   }
   const body = await readLimitedJson(request);
-  const clientId = body?.clientId;
+  const clientId = bearerCredential(request);
   const signingKey = body?.signingKey;
   const keyCommitment = body?.keyCommitment;
 
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     await tx.insert(chatRooms).values({ id: roomId, kind: "private", keyCommitment });
     await tx.insert(chatParticipants).values({
       roomId,
-      clientId,
+      clientId: hashAccessCredential(clientId),
       seat: 1,
       signingKey,
     });
