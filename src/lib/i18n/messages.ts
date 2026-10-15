@@ -1,0 +1,2957 @@
+// Translations for the 20 most-spoken languages worldwide.
+// Each key is the canonical English string from the source-of-truth,
+// and each value is its translation. Translations are concise and
+// natural, kept short to fit the chat UI.
+
+export const SUPPORTED_LOCALES = [
+  { code: "en", label: "English", native: "English" },
+  { code: "zh", label: "Chinese (Mandarin)", native: "中文" },
+  { code: "hi", label: "Hindi", native: "हिन्दी" },
+  { code: "es", label: "Spanish", native: "Español" },
+  { code: "fr", label: "French", native: "Français" },
+  { code: "ar", label: "Arabic", native: "العربية", rtl: true },
+  { code: "bn", label: "Bengali", native: "বাংলা" },
+  { code: "pt", label: "Portuguese", native: "Português" },
+  { code: "ru", label: "Russian", native: "Русский" },
+  { code: "ur", label: "Urdu", native: "اردو", rtl: true },
+  { code: "id", label: "Indonesian", native: "Bahasa Indonesia" },
+  { code: "de", label: "German", native: "Deutsch" },
+  { code: "ja", label: "Japanese", native: "日本語" },
+  { code: "sw", label: "Swahili", native: "Kiswahili" },
+  { code: "mr", label: "Marathi", native: "मराठी" },
+  { code: "te", label: "Telugu", native: "తెలుగు" },
+  { code: "tr", label: "Turkish", native: "Türkçe" },
+  { code: "ta", label: "Tamil", native: "தமிழ்" },
+  { code: "vi", label: "Vietnamese", native: "Tiếng Việt" },
+  { code: "ko", label: "Korean", native: "한국어" },
+] as const;
+
+export type LocaleCode = (typeof SUPPORTED_LOCALES)[number]["code"];
+
+export const DEFAULT_LOCALE: LocaleCode = "en";
+
+// Explicit list of translatable message keys. Defined as a string union
+// so TypeScript doesn't try to infer it from `messages.en` (which would
+// create a circular reference at the declaration site).
+export type MessageKey =
+  | "appName"
+  | "tagline"
+  | "heroTitle1"
+  | "heroTitle2"
+  | "heroBody"
+  | "strangerTitle"
+  | "strangerBody"
+  | "strangerCta"
+  | "roomTitle"
+  | "roomBody"
+  | "createRoom"
+  | "creatingRoom"
+  | "joinRoomLink"
+  | "footerNote"
+  | "anonymous"
+  | "youAre"
+  | "backHome"
+  | "searchingTag"
+  | "searchingTitle"
+  | "searchingBody"
+  | "searchingStatus"
+  | "chatTitleDefault"
+  | "chatTitleWith"
+  | "chatSubtitle"
+  | "statusConnected"
+  | "statusPartnerLeft"
+  | "statusWaiting"
+  | "serviceUnavailable"
+  | "partnerLabel"
+  | "partnerLeftMsg"
+  | "inputPlaceholder"
+  | "inputPlaceholderConnected"
+  | "inputPlaceholderWaiting"
+  | "sendBtn"
+  | "sendingBtn"
+  | "leaveBtn"
+  | "nextBtn"
+  | "copyLink"
+  | "copiedLink"
+  | "inviteCodeLabel"
+  | "emptyIce"
+  | "emptyWaiting"
+  | "sendFailed"
+  | "beRespectful"
+  | "roomClosedTag"
+  | "roomClosedTitle"
+  | "roomClosedBody"
+  | "backHomeBtn"
+  | "closeRoom"
+  | "joinTitle"
+  | "joinBody"
+  | "joinPlaceholder"
+  | "joinSubmit"
+  | "joinError"
+  | "confirmLeaveTitle"
+  | "confirmLeaveBody"
+  | "confirmLeaveConfirm"
+  | "confirmLeaveCancel"
+  | "confirmNextTitle"
+  | "confirmNextBody"
+  | "confirmNextConfirm"
+  | "confirmNextCancel"
+  | "confirmCloseRoomTitle"
+  | "confirmCloseRoomBody"
+  | "confirmCloseRoomConfirm"
+  | "confirmCloseRoomCancel"
+  | "loading"
+  | "languageLabel"
+  | "localChatTitle"
+  | "localChatBody"
+  | "localChatCta"
+  | "localChatJoinPlaceholder"
+  | "localChatJoinSubmit"
+  | "localChatNewId"
+  | "localChatLeave"
+  | "localChatClearHistory"
+  | "localChatConfirmClearTitle"
+  | "localChatConfirmClearBody"
+  | "localChatConfirmClearConfirm"
+  | "localChatConfirmClearCancel"
+  | "localChatTabCount"
+  | "localChatPresenceOnly"
+  | "localChatEmpty"
+  | "localChatRoomFull"
+  | "newChat"
+  | "historySearchPlaceholder"
+  | "historyEmpty"
+  | "historyNoMatches"
+  | "historyJustNow"
+  | "historyMinutesAgo"
+  | "historyHoursAgo"
+  | "historyClearAll"
+  | "historyClearConfirm"
+  | "historyForgetOne"
+  | "historyGroupToday"
+  | "historyGroupYesterday"
+  | "historyGroupLastWeek"
+  | "historyGroupOlder"
+  | "historyLiveBadge"
+  | "cryptoHandshakeTitle"
+  | "cryptoHandshakeBody"
+  | "cryptoHandshakeStatus"
+  | "encryptedBadge"
+  | "roomKeyMissingTitle"
+  | "roomKeyMissingBody"
+  | "roomFullTitle"
+  | "roomFullBody"
+  | "roomAccessErrorTitle"
+  | "roomAccessErrorBody"
+  | "rejoinTitle"
+  | "rejoinBody"
+  | "rejoinStranger"
+  | "rejoinRoom"
+  | "rejoinCta"
+  | "rejoinDismiss"
+  | "history";
+
+type LocaleMessages = Record<MessageKey, string>;
+
+const messages: Record<LocaleCode, LocaleMessages> = {
+  // English — source of truth
+  en: {
+    appName: "Chatterbox",
+    tagline: "Text-first chat roulette",
+    heroTitle1: "Talk to a stranger.",
+    heroTitle2: "Or invite a friend.",
+    heroBody:
+      "Spin up a private room with a shareable link, or jump into the roulette and get paired with a random person from anywhere. No accounts, just a name and a chat window.",
+    strangerTitle: "Stranger roulette",
+    strangerBody: "We'll pair you with a random person. Skip any time.",
+    strangerCta: "Start chatting →",
+    roomTitle: "Private room",
+    roomBody:
+      "Create a room, share the link with one friend, and chat directly. No random pairings.",
+    createRoom: "Create new room",
+    creatingRoom: "Creating…",
+    joinRoomLink: "Have an invite code? Join →",
+    footerNote:
+      "Be kind. No accounts, no history outside this session, no logs beyond what's needed to deliver messages.",
+    anonymous: "Anonymous chat",
+    youAre: "You are",
+    backHome: "← Back to home",
+
+    searchingTag: "Stranger roulette",
+    searchingTitle: "Looking for someone…",
+    searchingBody:
+      "Hang tight. We'll pair you up as soon as another chatter joins.",
+    searchingStatus: "Searching the queue…",
+
+    chatTitleDefault: "Stranger chat",
+    chatTitleWith: "Chatting with {name}",
+    chatSubtitle: "Anonymous 1-on-1 chat",
+    statusConnected: "Connected",
+    statusPartnerLeft: "Partner disconnected",
+    statusWaiting: "Waiting for guest",
+    serviceUnavailable: "Service unavailable",
+    partnerLabel: "Stranger",
+    partnerLeftMsg: "{label} has disconnected.",
+    inputPlaceholder: "Say something nice…",
+    inputPlaceholderConnected: "Type a message…",
+    inputPlaceholderWaiting: "Waiting for someone to join…",
+    sendBtn: "Send",
+    sendingBtn: "…",
+    leaveBtn: "Leave",
+    nextBtn: "Next stranger",
+    copyLink: "Copy invite link",
+    copiedLink: "Copied!",
+    inviteCodeLabel: "Invite code: {code}",
+    emptyIce: "Say hi to break the ice.",
+    emptyWaiting: "Waiting for a partner…",
+    sendFailed: "Failed to send. Check your connection.",
+    beRespectful: "Be respectful. Press Enter to send. {name}",
+
+    roomClosedTag: "Room closed",
+    roomClosedTitle: "This chat is closed.",
+    roomClosedBody:
+      "The host ended the room. Create a new one to keep chatting.",
+    backHomeBtn: "Back to home",
+    closeRoom: "Close room",
+
+    joinTitle: "Join a private room",
+    joinBody: "Paste the invite code or full URL your friend sent you.",
+    joinPlaceholder: "https://…/room/abc123  or  abc123",
+    joinSubmit: "Join room",
+    joinError: "Paste a full invite URL or the code shown to the host.",
+
+    confirmLeaveTitle: "Leave this chat?",
+    confirmLeaveBody:
+      "You'll be disconnected from this conversation and it can't be undone.",
+    confirmLeaveConfirm: "Leave",
+    confirmLeaveCancel: "Stay",
+
+    confirmNextTitle: "Find a new stranger?",
+    confirmNextBody:
+      "Your current chat will end and you'll be paired with someone new.",
+    confirmNextConfirm: "Next stranger",
+    confirmNextCancel: "Stay",
+
+    confirmCloseRoomTitle: "Close this room?",
+    confirmCloseRoomBody:
+      "This will end the chat for both you and your guest. It can't be undone.",
+    confirmCloseRoomConfirm: "Close room",
+    confirmCloseRoomCancel: "Keep open",
+
+    loading: "Loading…",
+    languageLabel: "Language",
+
+    localChatTitle: "Local tab chat",
+    localChatBody:
+      "Open this page in two tabs (or share the link with a friend on the same device) to chat. Messages stay in your browser — nothing is sent to the server.",
+    localChatCta: "Start a local chat →",
+    localChatJoinPlaceholder: "Pick or paste a room key",
+    localChatJoinSubmit: "Open room",
+    localChatNewId: "Generate new key",
+    localChatLeave: "Leave",
+    localChatClearHistory: "Clear history",
+    localChatConfirmClearTitle: "Clear all local messages?",
+    localChatConfirmClearBody:
+      "This permanently removes the message history for this room key from this browser.",
+    localChatConfirmClearConfirm: "Clear",
+    localChatConfirmClearCancel: "Cancel",
+    localChatTabCount: "{n} tab(s) here",
+    localChatPresenceOnly: "Local-only",
+    localChatEmpty: "Open this room in another tab to start chatting.",
+    localChatRoomFull: "This room is full (max 8 tabs).",
+    history: "History",
+
+    rejoinTitle: "Continue where you left off",
+    rejoinBody:
+      "You have an ongoing conversation. Rejoin to keep chatting, or dismiss to start fresh.",
+    rejoinStranger: "Stranger chat",
+    rejoinRoom: "Private room",
+    rejoinCta: "Rejoin",
+    rejoinDismiss: "Dismiss",
+    newChat: "New chat",
+    historySearchPlaceholder: "Search chats…",
+    historyEmpty: "No chats yet. Start one above.",
+    historyNoMatches: "No matches.",
+    historyJustNow: "just now",
+    historyMinutesAgo: "{n}m ago",
+    historyHoursAgo: "{n}h ago",
+    historyClearAll: "Clear all history",
+    historyClearConfirm: "Clear all chat history?",
+    historyForgetOne: "Forget this chat",
+    historyGroupToday: "Today",
+    historyGroupYesterday: "Yesterday",
+    historyGroupLastWeek: "Previous 7 days",
+    historyGroupOlder: "Older",
+    historyLiveBadge: "live",
+    cryptoHandshakeTitle: "Exchanging keys…",
+    cryptoHandshakeBody: "Setting up end-to-end encryption between you and your partner. The server can't read this conversation.",
+    cryptoHandshakeStatus: "Exchanging keys…",
+    encryptedBadge: "Encrypted",
+    roomKeyMissingTitle: "The invite link is missing its encryption key.",
+    roomKeyMissingBody: "Open the original invite link containing the #key fragment, or use this room on the browser where it was created.",
+    roomFullTitle: "Room is full",
+    roomFullBody: "This private room already has two participants. Ask the host for a new invite link.",
+    roomAccessErrorTitle: "Cannot open this room",
+    roomAccessErrorBody: "The room was closed or this invite is no longer valid.",
+  },
+
+  zh: {
+    appName: "Chatterbox",
+    tagline: "文字版随机聊天",
+    heroTitle1: "和陌生人聊聊。",
+    heroTitle2: "或者邀请好友。",
+    heroBody:
+      "创建一个私密房间并分享链接,或直接进入随机匹配,与来自各地的陌生人聊天。无需账号,只需一个昵称和一个聊天窗口。",
+    strangerTitle: "随机匹配",
+    strangerBody: "我们会将你与一位随机用户配对。随时可以换人。",
+    strangerCta: "开始聊天 →",
+    roomTitle: "私密房间",
+    roomBody: "创建房间并分享链接给好友,直接聊天。没有随机配对。",
+    createRoom: "创建新房间",
+    creatingRoom: "创建中…",
+    joinRoomLink: "有邀请码?加入 →",
+    footerNote: "请友善交流。无需账号,本次会话之外不留记录。",
+    anonymous: "匿名聊天",
+    youAre: "你是",
+    backHome: "← 返回首页",
+
+    searchingTag: "随机匹配",
+    searchingTitle: "正在寻找伙伴…",
+    searchingBody: "稍等片刻,一旦匹配到其他用户我们就会通知你。",
+    searchingStatus: "正在搜索…",
+
+    chatTitleDefault: "陌生人聊天",
+    chatTitleWith: "正在与 {name} 聊天",
+    chatSubtitle: "匿名一对一聊天",
+    statusConnected: "已连接",
+    statusPartnerLeft: "对方已离开",
+    statusWaiting: "等待对方加入",
+    serviceUnavailable: "服务不可用",
+    partnerLabel: "陌生人",
+    partnerLeftMsg: "{label} 已断开连接。",
+    inputPlaceholder: "说点什么吧…",
+    inputPlaceholderConnected: "输入消息…",
+    inputPlaceholderWaiting: "等待对方加入…",
+    sendBtn: "发送",
+    sendingBtn: "…",
+    leaveBtn: "离开",
+    nextBtn: "换一个人",
+    copyLink: "复制邀请链接",
+    copiedLink: "已复制!",
+    inviteCodeLabel: "邀请码: {code}",
+    emptyIce: "打个招呼吧。",
+    emptyWaiting: "等待对方加入…",
+    sendFailed: "发送失败,请检查网络。",
+    beRespectful: "请友善交流。按 Enter 发送。{name}",
+
+    roomClosedTag: "房间已关闭",
+    roomClosedTitle: "本次聊天已结束。",
+    roomClosedBody: "房主已关闭房间,创建一个新房间继续聊天吧。",
+    backHomeBtn: "返回首页",
+    closeRoom: "关闭房间",
+
+    joinTitle: "加入私密房间",
+    joinBody: "粘贴好友发给你的邀请码或完整链接。",
+    joinPlaceholder: "https://…/room/abc123  或  abc123",
+    joinSubmit: "加入房间",
+    joinError: "请粘贴完整的邀请链接或房主提供的邀请码。",
+
+    confirmLeaveTitle: "离开这次聊天?",
+    confirmLeaveBody: "你将断开与对方的连接,且无法恢复。",
+    confirmLeaveConfirm: "离开",
+    confirmLeaveCancel: "留下",
+
+    confirmNextTitle: "换一位陌生人?",
+    confirmNextBody: "当前对话将结束,我们会为你匹配一位新伙伴。",
+    confirmNextConfirm: "换一个人",
+    confirmNextCancel: "留下",
+
+    confirmCloseRoomTitle: "关闭这个房间?",
+    confirmCloseRoomBody: "你和对方的聊天都将结束,且无法撤销。",
+    confirmCloseRoomConfirm: "关闭房间",
+    confirmCloseRoomCancel: "保持开启",
+
+    loading: "加载中…",
+    languageLabel: "语言",
+
+    localChatTitle: "本地标签聊天",
+    localChatBody: "在两个标签页打开(或与同设备好友分享链接)即可聊天。消息只保存在你的浏览器中,不会发送到服务器。",
+    localChatCta: "开始本地聊天 →",
+    localChatJoinPlaceholder: "选择或粘贴房间号",
+    localChatJoinSubmit: "打开房间",
+    localChatNewId: "生成新钥匙",
+    localChatLeave: "离开",
+    localChatClearHistory: "清空历史",
+    localChatConfirmClearTitle: "清空所有本地消息?",
+    localChatConfirmClearBody: "这将从本浏览器永久删除此房间号的消息历史。",
+    localChatConfirmClearConfirm: "清空",
+    localChatConfirmClearCancel: "取消",
+    localChatTabCount: "{n} 个标签",
+    localChatPresenceOnly: "仅本地",
+    localChatEmpty: "在另一个标签页打开此房间即可开始聊天。",
+    localChatRoomFull: "房间已满(最多 8 个标签)。",
+    history: "历史",
+
+    rejoinTitle: "继续之前的对话",
+    rejoinBody: "你有一个进行中的对话。重新加入继续聊天,或忽略以重新开始。",
+    rejoinStranger: "陌生人聊天",
+    rejoinRoom: "私密房间",
+    rejoinCta: "重新加入",
+    rejoinDismiss: "忽略",
+    newChat: "新聊天",
+    historySearchPlaceholder: "搜索聊天…",
+    historyEmpty: "暂无聊天。在上方开始一个。",
+    historyNoMatches: "无匹配。",
+    historyJustNow: "刚刚",
+    historyMinutesAgo: "{n} 分钟前",
+    historyHoursAgo: "{n} 小时前",
+    historyClearAll: "清空所有历史",
+    historyClearConfirm: "清空所有聊天记录?",
+    historyForgetOne: "移除该聊天",
+    historyGroupToday: "今天",
+    historyGroupYesterday: "昨天",
+    historyGroupLastWeek: "近 7 天",
+    historyGroupOlder: "更早",
+    historyLiveBadge: "活跃",
+    cryptoHandshakeTitle: "正在交换密钥…",
+    cryptoHandshakeBody: "正在与你和对方之间建立端到端加密。服务器无法读取此次对话。",
+    cryptoHandshakeStatus: "正在交换密钥…",
+    encryptedBadge: "已加密",
+    roomKeyMissingTitle: "邀请链接缺少加密密钥。",
+    roomKeyMissingBody: "请打开带有 #key 片段的原始邀请链接，或在创建此房间的浏览器中打开。",
+    roomFullTitle: "房间已满",
+    roomFullBody: "此私人房间已有两位参与者。请向房主索取新的邀请链接。",
+    roomAccessErrorTitle: "无法打开此房间",
+    roomAccessErrorBody: "房间已关闭或此邀请不再有效。",
+  },
+
+  hi: {
+    appName: "Chatterbox",
+    tagline: "टेक्स्ट-आधारित रैंडम चैट",
+    heroTitle1: "किसी अजनबी से बात करें।",
+    heroTitle2: "या किसी मित्र को आमंत्रित करें।",
+    heroBody:
+      "एक निजी रूम बनाएं और लिंक साझा करें, या रूलेट में शामिल हों और कहीं से भी एक यादृच्छिक व्यक्ति से जुड़ें। कोई खाता नहीं, बस एक नाम और एक चैट विंडो।",
+    strangerTitle: "अजनबी रूलेट",
+    strangerBody: "हम आपको किसी यादृच्छिक व्यक्ति से जोड़ेंगे। कभी भी स्किप करें।",
+    strangerCta: "चैट शुरू करें →",
+    roomTitle: "निजी रूम",
+    roomBody:
+      "रूम बनाएं, एक मित्र के साथ लिंक साझा करें और सीधे चैट करें। कोई यादृच्छिक जोड़ी नहीं।",
+    createRoom: "नया रूम बनाएं",
+    creatingRoom: "बना रहे हैं…",
+    joinRoomLink: "क्या आपके पास आमंत्रण कोड है? शामिल हों →",
+    footerNote:
+      "दयालु रहें। कोई खाता नहीं, इस सत्र के बाहर कोई इतिहास नहीं।",
+    anonymous: "अनाम चैट",
+    youAre: "आप हैं",
+    backHome: "← होम पर वापस",
+
+    searchingTag: "अजनबी रूलेट",
+    searchingTitle: "किसी को खोज रहे हैं…",
+    searchingBody:
+      "रुकें। जैसे ही कोई और चैटर जुड़ेगा हम आपको जोड़ देंगे।",
+    searchingStatus: "कतार में खोज रहे हैं…",
+
+    chatTitleDefault: "अजनबी चैट",
+    chatTitleWith: "{name} से चैट हो रही है",
+    chatSubtitle: "अनाम 1-ऑन-1 चैट",
+    statusConnected: "जुड़ा हुआ",
+    statusPartnerLeft: "साथी ने छोड़ा",
+    statusWaiting: "मेहमान की प्रतीक्षा",
+    serviceUnavailable: "सेवा अनुपलब्ध",
+    partnerLabel: "अजनबी",
+    partnerLeftMsg: "{label} डिस्कनेक्ट हो गया।",
+    inputPlaceholder: "कुछ अच्छा कहें…",
+    inputPlaceholderConnected: "संदेश टाइप करें…",
+    inputPlaceholderWaiting: "किसी के जुड़ने की प्रतीक्षा…",
+    sendBtn: "भेजें",
+    sendingBtn: "…",
+    leaveBtn: "छोड़ें",
+    nextBtn: "अगला अजनबी",
+    copyLink: "आमंत्रण लिंक कॉपी करें",
+    copiedLink: "कॉपी हो गया!",
+    inviteCodeLabel: "आमंत्रण कोड: {code}",
+    emptyIce: "बातचीत शुरू करने के लिए नमस्ते कहें।",
+    emptyWaiting: "साथी की प्रतीक्षा…",
+    sendFailed: "भेजने में विफल। कनेक्शन जांचें।",
+    beRespectful: "सम्मानजनक रहें। भेजने के लिए Enter दबाएं। {name}",
+
+    roomClosedTag: "रूम बंद",
+    roomClosedTitle: "यह चैट बंद है।",
+    roomClosedBody:
+      "होस्ट ने रूम समाप्त कर। नया बनाकर चैट जारी रखें।",
+    backHomeBtn: "होम पर वापस",
+    closeRoom: "रूम बंद करें",
+
+    joinTitle: "निजी रूम में शामिल हों",
+    joinBody:
+      "अपने मित्र द्वारा भेजा गया आमंत्रण कोड या पूरा URL पेस्ट करें।",
+    joinPlaceholder: "https://…/room/abc123  या  abc123",
+    joinSubmit: "रूम में शामिल हों",
+    joinError:
+      "पूरा आमंत्रण URL या होस्ट द्वारा दिया गया कोड पेस्ट करें।",
+
+    confirmLeaveTitle: "इस चैट को छोड़ें?",
+    confirmLeaveBody:
+      "आप इस बातचीत से डिस्कनेक्ट हो जाएंगे और इसे पूर्ववत नहीं किया जा सकता।",
+    confirmLeaveConfirm: "छोड़ें",
+    confirmLeaveCancel: "रुकें",
+
+    confirmNextTitle: "नया अजनबी खोजें?",
+    confirmNextBody:
+      "आपकी मौजूदा चैट समाप्त हो जाएगी और आपको किसी नए व्यक्ति से जोड़ा जाएगा।",
+    confirmNextConfirm: "अगला अजनबी",
+    confirmNextCancel: "रुकें",
+
+    confirmCloseRoomTitle: "इस रूम को बंद करें?",
+    confirmCloseRoomBody:
+      "यह आपके और आपके मेहमान दोनों की चैट समाप्त कर देगा। इसे पूर्ववत नहीं किया जा सकता।",
+    confirmCloseRoomConfirm: "रूम बंद करें",
+    confirmCloseRoomCancel: "खुला रखें",
+
+    loading: "लोड हो रहा है…",
+    languageLabel: "भाषा",
+
+    localChatTitle: "स्थानीय टैब चैट",
+    localChatBody: "इस पेज को दो टैब में खोलें (या उसी डिवाइस पर मित्र के साथ लिंक साझा करें)। संदेश आपके ब्राउज़र में रहते हैं — सर्वर पर कुछ नहीं भेजा जाता।",
+    localChatCta: "स्थानीय चैट शुरू करें →",
+    localChatJoinPlaceholder: "रूम कुंजी चुनें या पेस्ट करें",
+    localChatJoinSubmit: "रूम खोलें",
+    localChatNewId: "नई कुंजी बनाएं",
+    localChatLeave: "छोड़ें",
+    localChatClearHistory: "इतिहास साफ़ करें",
+    localChatConfirmClearTitle: "सभी स्थानीय संदेश साफ़ करें?",
+    localChatConfirmClearBody: "यह इस ब्राउज़र से इस रूम कुंजी का इतिहास स्थायी रूप से हटा देगा।",
+    localChatConfirmClearConfirm: "साफ़ करें",
+    localChatConfirmClearCancel: "रद्द करें",
+    localChatTabCount: "{n} टैब",
+    localChatPresenceOnly: "केवल स्थानीय",
+    localChatEmpty: "चैट शुरू करने के लिए इस रूम को दूसरे टैब में खोलें।",
+    localChatRoomFull: "रूम भरा हुआ है (अधिकतम 8 टैब)।",
+    history: "इतिहास",
+
+    rejoinTitle: "जहाँ छोड़ा था वहाँ से जारी रखें",
+    rejoinBody: "आपके पास एक चल रही बातचीत है। फिर से शामिल हों, या नया शुरू करने के लिए खारिज करें।",
+    rejoinStranger: "अजनबी चैट",
+    rejoinRoom: "निजी रूम",
+    rejoinCta: "फिर से शामिल हों",
+    rejoinDismiss: "खारिज करें",
+    newChat: "नई चैट",
+    historySearchPlaceholder: "चैट खोजें…",
+    historyEmpty: "अभी तक कोई चैट नहीं। ऊपर शुरू करें।",
+    historyNoMatches: "कोई मिलान नहीं।",
+    historyJustNow: "अभी-अभी",
+    historyMinutesAgo: "{n} मिनट पहले",
+    historyHoursAgo: "{n} घंटे पहले",
+    historyClearAll: "सारा इतिहास साफ़ करें",
+    historyClearConfirm: "क्या सारा चैट इतिहास साफ़ करें?",
+    historyForgetOne: "इस चैट को भूलें",
+    historyGroupToday: "आज",
+    historyGroupYesterday: "कल",
+    historyGroupLastWeek: "पिछले 7 दिन",
+    historyGroupOlder: "पुराने",
+    historyLiveBadge: "लाइव",
+    cryptoHandshakeTitle: "कुंजियाँ बदली जा रही हैं…",
+    cryptoHandshakeBody: "आपके और साथी के बीच एन्ड-टू-एन्ड एन्क्रिप्शन स्थापित हो रहा है। सर्वर इस बातचीत को नहीं पढ़ सकता।",
+    cryptoHandshakeStatus: "कुंजियाँ बदली जा रही हैं…",
+    encryptedBadge: "एन्क्रिप्टेड",
+    roomKeyMissingTitle: "आमंत्रण लिंक में एन्क्रिप्शन कुंजी नहीं है।",
+    roomKeyMissingBody: "मूल आमंत्रण लिंक खोलें जिसमें #key अंश हो, या इस रूम को उसी ब्राउज़र में खोलें जिसमें इसे बनाया गया था।",
+    roomFullTitle: "रूम भरा हुआ है",
+    roomFullBody: "इस निजी रूम में पहले से दो प्रतिभागी हैं। होस्ट से नया आमंत्रण लिंक मांगें।",
+    roomAccessErrorTitle: "यह रूम नहीं खोल सकते",
+    roomAccessErrorBody: "रूम बंद हो गया है या यह आमंत्रण अब मान्य नहीं है।",
+  },
+
+  es: {
+    appName: "Chatterbox",
+    tagline: "Chat aleatorio solo de texto",
+    heroTitle1: "Habla con un desconocido.",
+    heroTitle2: "O invita a un amigo.",
+    heroBody:
+      "Crea una sala privada con un enlace compartible, o únete a la ruleta y conéctate con alguien al azar desde cualquier parte. Sin cuentas, solo un nombre y una ventana de chat.",
+    strangerTitle: "Ruleta de desconocidos",
+    strangerBody: "Te emparejaremos con alguien al azar. Salta cuando quieras.",
+    strangerCta: "Empezar a chatear →",
+    roomTitle: "Sala privada",
+    roomBody:
+      "Crea una sala, comparte el enlace con un amigo y chatead directamente. Sin emparejamientos aleatorios.",
+    createRoom: "Crear nueva sala",
+    creatingRoom: "Creando…",
+    joinRoomLink: "¿Tienes un código de invitación? Únete →",
+    footerNote:
+      "Sé amable. Sin cuentas, sin historial fuera de esta sesión, sin registros más allá de lo necesario para enviar mensajes.",
+    anonymous: "Chat anónimo",
+    youAre: "Tú eres",
+    backHome: "← Volver al inicio",
+
+    searchingTag: "Ruleta de desconocidos",
+    searchingTitle: "Buscando a alguien…",
+    searchingBody: "Aguanta. Te emparejaremos en cuanto alguien más se una.",
+    searchingStatus: "Buscando en la cola…",
+
+    chatTitleDefault: "Chat con desconocido",
+    chatTitleWith: "Chateando con {name}",
+    chatSubtitle: "Chat anónimo 1 a 1",
+    statusConnected: "Conectado",
+    statusPartnerLeft: "El otro se ha desconectado",
+    statusWaiting: "Esperando invitado",
+    serviceUnavailable: "Servicio no disponible",
+    partnerLabel: "Desconocido",
+    partnerLeftMsg: "{label} se ha desconectado.",
+    inputPlaceholder: "Di algo amable…",
+    inputPlaceholderConnected: "Escribe un mensaje…",
+    inputPlaceholderWaiting: "Esperando a que alguien se una…",
+    sendBtn: "Enviar",
+    sendingBtn: "…",
+    leaveBtn: "Salir",
+    nextBtn: "Siguiente desconocido",
+    copyLink: "Copiar enlace",
+    copiedLink: "¡Copiado!",
+    inviteCodeLabel: "Código de invitación: {code}",
+    emptyIce: "Saluda para romper el hielo.",
+    emptyWaiting: "Esperando a un compañero…",
+    sendFailed: "Error al enviar. Comprueba tu conexión.",
+    beRespectful: "Sé respetuoso. Pulsa Enter para enviar. {name}",
+
+    roomClosedTag: "Sala cerrada",
+    roomClosedTitle: "Este chat está cerrado.",
+    roomClosedBody:
+      "El anfitrión ha cerrado la sala. Crea una nueva para seguir chateando.",
+    backHomeBtn: "Volver al inicio",
+    closeRoom: "Cerrar sala",
+
+    joinTitle: "Unirse a una sala privada",
+    joinBody: "Pega el código de invitación o la URL completa que te envió tu amigo.",
+    joinPlaceholder: "https://…/room/abc123  o  abc123",
+    joinSubmit: "Unirse a la sala",
+    joinError:
+      "Pega una URL de invitación completa o el código que te dio el anfitrión.",
+
+    confirmLeaveTitle: "¿Salir de este chat?",
+    confirmLeaveBody:
+      "Te desconectarás de la conversación y no se puede deshacer.",
+    confirmLeaveConfirm: "Salir",
+    confirmLeaveCancel: "Quedarme",
+
+    confirmNextTitle: "¿Buscar un nuevo desconocido?",
+    confirmNextBody:
+      "Tu chat actual terminará y te emparejaremos con alguien nuevo.",
+    confirmNextConfirm: "Siguiente desconocido",
+    confirmNextCancel: "Quedarme",
+
+    confirmCloseRoomTitle: "¿Cerrar esta sala?",
+    confirmCloseRoomBody:
+      "Esto terminará el chat para ti y tu invitado. No se puede deshacer.",
+    confirmCloseRoomConfirm: "Cerrar sala",
+    confirmCloseRoomCancel: "Mantener abierta",
+
+    loading: "Cargando…",
+    languageLabel: "Idioma",
+
+    localChatTitle: "Chat local entre pestañas",
+    localChatBody: "Abre esta página en dos pestañas (o comparte el enlace con alguien en el mismo dispositivo) para chatear. Los mensajes se quedan en tu navegador — nada se envía al servidor.",
+    localChatCta: "Iniciar un chat local →",
+    localChatJoinPlaceholder: "Elige o pega una clave de sala",
+    localChatJoinSubmit: "Abrir sala",
+    localChatNewId: "Generar nueva clave",
+    localChatLeave: "Salir",
+    localChatClearHistory: "Borrar historial",
+    localChatConfirmClearTitle: "¿Borrar todos los mensajes locales?",
+    localChatConfirmClearBody: "Esto eliminará permanentemente el historial de mensajes de esta sala en este navegador.",
+    localChatConfirmClearConfirm: "Borrar",
+    localChatConfirmClearCancel: "Cancelar",
+    localChatTabCount: "{n} pestaña(s)",
+    localChatPresenceOnly: "Solo local",
+    localChatEmpty: "Abre esta sala en otra pestaña para empezar a chatear.",
+    localChatRoomFull: "Esta sala está llena (máx. 8 pestañas).",
+    history: "Historial",
+
+    rejoinTitle: "Continúa donde lo dejaste",
+    rejoinBody: "Tienes una conversación en curso. Únete de nuevo o descarta para empezar de cero.",
+    rejoinStranger: "Chat con desconocido",
+    rejoinRoom: "Sala privada",
+    rejoinCta: "Reanudar",
+    rejoinDismiss: "Descartar",
+    newChat: "Nuevo chat",
+    historySearchPlaceholder: "Buscar chats…",
+    historyEmpty: "Aún no hay chats. Empieza uno arriba.",
+    historyNoMatches: "Sin coincidencias.",
+    historyJustNow: "ahora",
+    historyMinutesAgo: "hace {n}m",
+    historyHoursAgo: "hace {n}h",
+    historyClearAll: "Borrar todo el historial",
+    historyClearConfirm: "¿Borrar todo el historial de chats?",
+    historyForgetOne: "Olvidar este chat",
+    historyGroupToday: "Hoy",
+    historyGroupYesterday: "Ayer",
+    historyGroupLastWeek: "Últimos 7 días",
+    historyGroupOlder: "Más antiguos",
+    historyLiveBadge: "activo",
+    cryptoHandshakeTitle: "Intercambiando claves…",
+    cryptoHandshakeBody: "Configurando el cifrado de extremo a extremo entre tú y tu compañero. El servidor no puede leer esta conversación.",
+    cryptoHandshakeStatus: "Intercambiando claves…",
+    encryptedBadge: "Cifrado",
+    roomKeyMissingTitle: "Falta la clave de cifrado en el enlace de invitación.",
+    roomKeyMissingBody: "Abre el enlace original que contiene el fragmento #key, o usa esta sala en el navegador donde se creó.",
+    roomFullTitle: "La sala está llena",
+    roomFullBody: "Esta sala privada ya tiene dos participantes. Pide al anfitrión un nuevo enlace.",
+    roomAccessErrorTitle: "No se puede abrir esta sala",
+    roomAccessErrorBody: "La sala se cerró o esta invitación ya no es válida.",
+  },
+
+  fr: {
+    appName: "Chatterbox",
+    tagline: "Chat roulette par texte",
+    heroTitle1: "Parlez à un inconnu.",
+    heroTitle2: "Ou invitez un ami.",
+    heroBody:
+      "Créez un salon privé avec un lien partageable, ou rejoignez la roulette pour être associé à quelqu'un au hasard. Pas de compte, juste un nom et une fenêtre de chat.",
+    strangerTitle: "Roulette d'inconnus",
+    strangerBody:
+      "Nous vous associerons à une personne au hasard. Passez à quelqu'un d'autre à tout moment.",
+    strangerCta: "Commencer à chatter →",
+    roomTitle: "Salon privé",
+    roomBody:
+      "Créez un salon, partagez le lien avec un ami et discutez directement. Pas d'appariements aléatoires.",
+    createRoom: "Créer un nouveau salon",
+    creatingRoom: "Création…",
+    joinRoomLink: "Vous avez un code d'invitation ? Rejoindre →",
+    footerNote:
+      "Soyez bienveillant. Pas de compte, pas d'historique en dehors de cette session.",
+    anonymous: "Chat anonyme",
+    youAre: "Vous êtes",
+    backHome: "← Retour à l'accueil",
+
+    searchingTag: "Roulette d'inconnus",
+    searchingTitle: "Recherche de quelqu'un…",
+    searchingBody:
+      "Patientez. Nous vous associerons dès qu'un autre chatter se connectera.",
+    searchingStatus: "Recherche dans la file…",
+
+    chatTitleDefault: "Chat avec un inconnu",
+    chatTitleWith: "Discussion avec {name}",
+    chatSubtitle: "Chat anonyme 1 à 1",
+    statusConnected: "Connecté",
+    statusPartnerLeft: "L'autre s'est déconnecté",
+    statusWaiting: "En attente d'un invité",
+    serviceUnavailable: "Service indisponible",
+    partnerLabel: "Inconnu",
+    partnerLeftMsg: "{label} s'est déconnecté.",
+    inputPlaceholder: "Dites quelque chose de gentil…",
+    inputPlaceholderConnected: "Tapez un message…",
+    inputPlaceholderWaiting: "En attente de quelqu'un…",
+    sendBtn: "Envoyer",
+    sendingBtn: "…",
+    leaveBtn: "Quitter",
+    nextBtn: "Inconnu suivant",
+    copyLink: "Copier le lien d'invitation",
+    copiedLink: "Copié !",
+    inviteCodeLabel: "Code d'invitation : {code}",
+    emptyIce: "Dites bonjour pour briser la glace.",
+    emptyWaiting: "En attente d'un partenaire…",
+    sendFailed: "Échec de l'envoi. Vérifiez votre connexion.",
+    beRespectful: "Soyez respectueux. Appuyez sur Entrée pour envoyer. {name}",
+
+    roomClosedTag: "Salon fermé",
+    roomClosedTitle: "Ce chat est fermé.",
+    roomClosedBody:
+      "L'hôte a fermé le salon. Créez-en un nouveau pour continuer.",
+    backHomeBtn: "Retour à l'accueil",
+    closeRoom: "Fermer le salon",
+
+    joinTitle: "Rejoindre un salon privé",
+    joinBody: "Collez le code d'invitation ou l'URL complète envoyée par votre ami.",
+    joinPlaceholder: "https://…/room/abc123  ou  abc123",
+    joinSubmit: "Rejoindre le salon",
+    joinError:
+      "Collez une URL d'invitation complète ou le code fourni par l'hôte.",
+
+    confirmLeaveTitle: "Quitter ce chat ?",
+    confirmLeaveBody:
+      "Vous serez déconnecté de cette conversation, sans possibilité de revenir.",
+    confirmLeaveConfirm: "Quitter",
+    confirmLeaveCancel: "Rester",
+
+    confirmNextTitle: "Trouver un nouvel inconnu ?",
+    confirmNextBody:
+      "Votre chat actuel se terminera et vous serez associé à quelqu'un de nouveau.",
+    confirmNextConfirm: "Inconnu suivant",
+    confirmNextCancel: "Rester",
+
+    confirmCloseRoomTitle: "Fermer ce salon ?",
+    confirmCloseRoomBody:
+      "Cela mettra fin au chat pour vous et votre invité. Action irréversible.",
+    confirmCloseRoomConfirm: "Fermer le salon",
+    confirmCloseRoomCancel: "Garder ouvert",
+
+    loading: "Chargement…",
+    languageLabel: "Langue",
+
+    localChatTitle: "Chat local entre onglets",
+    localChatBody: "Ouvrez cette page dans deux onglets (ou partagez le lien sur le même appareil) pour discuter. Les messages restent dans votre navigateur — rien n'est envoyé au serveur.",
+    localChatCta: "Démarrer un chat local →",
+    localChatJoinPlaceholder: "Choisir ou coller une clé de salon",
+    localChatJoinSubmit: "Ouvrir le salon",
+    localChatNewId: "Nouvelle clé",
+    localChatLeave: "Quitter",
+    localChatClearHistory: "Effacer l'historique",
+    localChatConfirmClearTitle: "Effacer tous les messages locaux ?",
+    localChatConfirmClearBody: "Cela supprimera définitivement l'historique de cette clé de salon dans ce navigateur.",
+    localChatConfirmClearConfirm: "Effacer",
+    localChatConfirmClearCancel: "Annuler",
+    localChatTabCount: "{n} onglet(s)",
+    localChatPresenceOnly: "Local uniquement",
+    localChatEmpty: "Ouvrez ce salon dans un autre onglet pour discuter.",
+    localChatRoomFull: "Ce salon est plein (max. 8 onglets).",
+    history: "Historique",
+
+    rejoinTitle: "Reprendre là où vous étiez",
+    rejoinBody: "Vous avez une conversation en cours. Reconnectez-vous ou ignorez pour repartir à zéro.",
+    rejoinStranger: "Chat avec un inconnu",
+    rejoinRoom: "Salon privé",
+    rejoinCta: "Reprendre",
+    rejoinDismiss: "Ignorer",
+    newChat: "Nouveau chat",
+    historySearchPlaceholder: "Rechercher des chats…",
+    historyEmpty: "Aucun chat pour l'instant. Commencez-en un ci-dessus.",
+    historyNoMatches: "Aucun résultat.",
+    historyJustNow: "à l'instant",
+    historyMinutesAgo: "il y a {n} min",
+    historyHoursAgo: "il y a {n} h",
+    historyClearAll: "Effacer tout l'historique",
+    historyClearConfirm: "Effacer tout l'historique des chats ?",
+    historyForgetOne: "Oublier ce chat",
+    historyGroupToday: "Aujourd'hui",
+    historyGroupYesterday: "Hier",
+    historyGroupLastWeek: "7 derniers jours",
+    historyGroupOlder: "Plus anciens",
+    historyLiveBadge: "actif",
+    cryptoHandshakeTitle: "Échange de clés…",
+    cryptoHandshakeBody: "Mise en place du chiffrement de bout en bout entre vous et votre partenaire. Le serveur ne peut pas lire cette conversation.",
+    cryptoHandshakeStatus: "Échange de clés…",
+    encryptedBadge: "Chiffré",
+    roomKeyMissingTitle: "La clé de chiffrement manque dans le lien d’invitation.",
+    roomKeyMissingBody: "Ouvrez le lien d’invitation original contenant le fragment #key, ou utilisez ce salon dans le navigateur où il a été créé.",
+    roomFullTitle: "Le salon est plein",
+    roomFullBody: "Ce salon privé compte déjà deux participants. Demandez un nouveau lien à l'hôte.",
+    roomAccessErrorTitle: "Impossible d'ouvrir ce salon",
+    roomAccessErrorBody: "Le salon est fermé ou cette invitation n'est plus valide.",
+  },
+
+  ar: {
+    appName: "Chatterbox",
+    tagline: "درشة نصية عشوائية",
+    heroTitle1: "تحدّث مع شخص غريب.",
+    heroTitle2: "أو ادعُ صديقًا.",
+    heroBody:
+      "أنشئ غرفة خاصة برابط قابل للمشاركة، أو انضم إلى الروليت وتواصل مع شخص عشوائي من أي مكان. لا حسابات، فقط اسم ونافذة دردشة.",
+    strangerTitle: "روليت الغرباء",
+    strangerBody: "سنزاوجك مع شخص عشوائي. يمكنك التخطي في أي وقت.",
+    strangerCta: "ابدأ الدردشة ←",
+    roomTitle: "غرفة خاصة",
+    roomBody: "أنشئ غرفة وشارك الرابط مع صديق للدردشة مباشرة دون أي اقتران عشوائي.",
+    createRoom: "إنشاء غرفة جديدة",
+    creatingRoom: "جارٍ الإنشاء…",
+    joinRoomLink: "لديك رمز دعوة؟ انضم ←",
+    footerNote: "كن لطيفًا. لا حسابات، لا تاريخ خارج هذه الجلسة.",
+    anonymous: "درشة مجهولة",
+    youAre: "أنت",
+    backHome: "← العودة إلى الرئيسية",
+
+    searchingTag: "روليت الغرباء",
+    searchingTitle: "نبحث عن شخص…",
+    searchingBody: "انتظر قليلًا. سنزاوجك فور انضمام شخص آخر.",
+    searchingStatus: "جارٍ البحث في القائمة…",
+
+    chatTitleDefault: "درشة مع غريب",
+    chatTitleWith: "الدردشة مع {name}",
+    chatSubtitle: "درشة مجهولة فردية",
+    statusConnected: "متصل",
+    statusPartnerLeft: "غادر الطرف الآخر",
+    statusWaiting: "بانتظار الضيف",
+    serviceUnavailable: "الخدمة غير متوفرة",
+    partnerLabel: "غريب",
+    partnerLeftMsg: "انقطع اتصال {label}.",
+    inputPlaceholder: "قل شيئًا لطيفًا…",
+    inputPlaceholderConnected: "اكتب رسالة…",
+    inputPlaceholderWaiting: "بانتظار انضمام أحد…",
+    sendBtn: "إرسال",
+    sendingBtn: "…",
+    leaveBtn: "مغادرة",
+    nextBtn: "شخص جديد",
+    copyLink: "نسخ رابط الدعوة",
+    copiedLink: "تم النسخ!",
+    inviteCodeLabel: "رمز الدعوة: {code}",
+    emptyIce: "سلّم لكسر الجمود.",
+    emptyWaiting: "بانتظار شريك…",
+    sendFailed: "فشل الإرسال. تحقق من اتصالك.",
+    beRespectful: "كن محترمًا. اضغط Enter للإرسال. {name}",
+
+    roomClosedTag: "الغرفة مغلقة",
+    roomClosedTitle: "هذه الدردشة مغلقة.",
+    roomClosedBody: "أنهى المضيف الغرفة. أنشئ غرفة جديدة لمواصلة الدردشة.",
+    backHomeBtn: "العودة إلى الرئيسية",
+    closeRoom: "إغلاق الغرفة",
+
+    joinTitle: "الانضمام إلى غرفة خاصة",
+    joinBody: "الصق رمز الدعوة أو الرابط الكامل الذي أرسله صديقك.",
+    joinPlaceholder: "https://…/room/abc123  أو  abc123",
+    joinSubmit: "انضم إلى الغرفة",
+    joinError: "الصق رابط دعوة كاملًا أو الرمز الذي منحك إياه المضيف.",
+
+    confirmLeaveTitle: "مغادرة هذه الدردشة؟",
+    confirmLeaveBody: "سيتم قطع اتصالك بهذه المحادثة ولا يمكن التراجع.",
+    confirmLeaveConfirm: "مغادرة",
+    confirmLeaveCancel: "البقاء",
+
+    confirmNextTitle: "البحث عن شخص جديد؟",
+    confirmNextBody: "ستنتهي دردشتك الحالية وسيتم زواجك بشخص جديد.",
+    confirmNextConfirm: "شخص جديد",
+    confirmNextCancel: "البقاء",
+
+    confirmCloseRoomTitle: "إغلاق هذه الغرفة؟",
+    confirmCloseRoomBody: "سيؤدي ذلك إلى إنهاء الدردشة لك ولضيفك. لا يمكن التراجع.",
+    confirmCloseRoomConfirm: "إغلاق الغرفة",
+    confirmCloseRoomCancel: "إبقاء مفتوحة",
+
+    loading: "جارٍ التحميل…",
+    languageLabel: "اللغة",
+
+    localChatTitle: "درشة محلية بين علامات التبويب",
+    localChatBody: "افتح هذه الصفحة في علامتي تبويب (أو شارك الرابط مع صديق على نفس الجهاز) للدردشة. تبقى الرسائل في متصفحك — لا يُرسل شيء إلى الخادم.",
+    localChatCta: "ابدأ درشة محلية ←",
+    localChatJoinPlaceholder: "اختر أو الصق مفتاح غرفة",
+    localChatJoinSubmit: "افتح الغرفة",
+    localChatNewId: "إنشاء مفتاح جديد",
+    localChatLeave: "مغادرة",
+    localChatClearHistory: "مسح السجل",
+    localChatConfirmClearTitle: "مسح جميع الرسائل المحلية؟",
+    localChatConfirmClearBody: "سيؤدي ذلك إلى إزالة سجل الرسائل لهذا المفتاح نهائيًا من هذا المتصفح.",
+    localChatConfirmClearConfirm: "مسح",
+    localChatConfirmClearCancel: "إلغاء",
+    localChatTabCount: "{n} علامة تبويب",
+    localChatPresenceOnly: "محلي فقط",
+    localChatEmpty: "افتح هذه الغرفة في علامة تبويب أخرى لبدء الدردشة.",
+    localChatRoomFull: "هذه الغرفة ممتلئة (بحد أقصى 8 علامات تبويب).",
+    history: "السجل",
+
+    rejoinTitle: "تابع من حيث توقفت",
+    rejoinBody: "لديك محادثة جارية. أعد الانضمام للاستمرار أو تجاهل للبدء من جديد.",
+    rejoinStranger: "درشة مع غريب",
+    rejoinRoom: "غرفة خاصة",
+    rejoinCta: "إعادة الانضمام",
+    rejoinDismiss: "تجاهل",
+    newChat: "درشة جديدة",
+    historySearchPlaceholder: "ابحث في الدردشات…",
+    historyEmpty: "لا توجد دردشات بعد. ابدأ واحدة أعلاه.",
+    historyNoMatches: "لا توجد نتائج.",
+    historyJustNow: "الآن",
+    historyMinutesAgo: "قبل {n} د",
+    historyHoursAgo: "قبل {n} س",
+    historyClearAll: "مسح كل السجل",
+    historyClearConfirm: "مسح كل سجل الدردشات؟",
+    historyForgetOne: "انسَ هذه الدردشة",
+    historyGroupToday: "اليوم",
+    historyGroupYesterday: "أمس",
+    historyGroupLastWeek: "آخر 7 أيام",
+    historyGroupOlder: "أقدم",
+    historyLiveBadge: "نشط",
+    cryptoHandshakeTitle: "تبادل المفاتيح…",
+    cryptoHandshakeBody: "إعداد التشفير من طرف إلى طرف بينك وبين شريكك. لا يمكن للخادم قراءة هذه المحادثة.",
+    cryptoHandshakeStatus: "تبادل المفاتيح…",
+    encryptedBadge: "مشفّر",
+    roomKeyMissingTitle: "رابط الدعوة لا يحتوي على مفتاح التشفير.",
+    roomKeyMissingBody: "افتح رابط الدعوة الأصلي الذي يحتوي على الجزء #key، أو افتح هذه الغرفة في المتصفح الذي أُنشئت فيه.",
+    roomFullTitle: "الغرفة ممتلئة",
+    roomFullBody: "تحتوي هذه الغرفة الخاصة بالفعل على مشاركين. اطلب رابط دعوة جديدًا من المضيف.",
+    roomAccessErrorTitle: "لا يمكن فتح هذه الغرفة",
+    roomAccessErrorBody: "تم إغلاق الغرفة أو أن هذه الدعوة لم تعد صالحة.",
+  },
+
+  bn: {
+    appName: "Chatterbox",
+    tagline: "টেক্সট-ভিত্তিক র‍্যান্ডম চ্যাট",
+    heroTitle1: "একজন অপরিচিতের সাথে কথা বলুন।",
+    heroTitle2: "অথবা একজন বন্ধুকে আমন্ত্রণ জানান।",
+    heroBody:
+      "একটি শেয়ারযোগ্য লিঙ্ক দিয়ে একটি ব্যক্তিগত রুম তৈরি করুন, অথবা রুলেটে যোগ দিয়ে যেকোনো জায়গা থেকে একজন এলোমেলো মানুষের সাথে যুক্ত হন। কোনো অ্যাকাউন্ট নেই, শুধু একটি নাম ও চ্যাট উইন্ডো।",
+    strangerTitle: "অপরিচিতের রুলেট",
+    strangerBody: "আমরা আপনাকে একজন এলোমেলো মানুষের সাথে যুক্ত করব। যেকোনো সময় এড়িয়ে যান।",
+    strangerCta: "চ্যাট শুরু করুন ←",
+    roomTitle: "ব্যক্তিগত রুম",
+    roomBody:
+      "রুম তৈরি করুন, একজন বন্ধুর সাথে লিঙ্ক শেয়ার করুন এবং সরাসরি চ্যাট করুন। কোনো এলোমেলো জোড়া নয়।",
+    createRoom: "নতুন রুম তৈরি করুন",
+    creatingRoom: "তৈরি হচ্ছে…",
+    joinRoomLink: "আমন্ত্রণ কোড আছে? যোগ দিন ←",
+    footerNote:
+      "দয়ালু থাকুন। কোনো অ্যাকাউন্ট নেই, এই সেশনের বাইরে কোনো ইতিহাস নেই।",
+    anonymous: "বেনামী চ্যাট",
+    youAre: "আপনি",
+    backHome: "← হোমে ফিরে যান",
+
+    searchingTag: "অপরিচিতের রুলেট",
+    searchingTitle: "কাউকে খুঁজছি…",
+    searchingBody: "একটু অপেক্ষা করুন। অন্য কেউ যোগ দিলেই আমরা আপনাকে যুক্ত করব।",
+    searchingStatus: "সারিতে খুঁজছি…",
+
+    chatTitleDefault: "অপরিচিতের সাথে চ্যাট",
+    chatTitleWith: "{name}-এর সাথে চ্যাট",
+    chatSubtitle: "বেনামী ১-অন-১ চ্যাট",
+    statusConnected: "সংযুক্ত",
+    statusPartnerLeft: "অংশীদার চলে গেছেন",
+    statusWaiting: "অতিথির জন্য অপেক্ষা",
+    serviceUnavailable: "পরিষেবা অনুপলব্ধ",
+    partnerLabel: "অপরিচিত",
+    partnerLeftMsg: "{label} সংযোগ বিচ্ছিন্ন হয়েছে।",
+    inputPlaceholder: "কিছু ভালো বলুন…",
+    inputPlaceholderConnected: "একটি মেসেজ লিখুন…",
+    inputPlaceholderWaiting: "কেউ যোগ দেওয়ার জন্য অপেক্ষা…",
+    sendBtn: "পাঠান",
+    sendingBtn: "…",
+    leaveBtn: "ছেড়ে দিন",
+    nextBtn: "পরবর্তী অপরিচিত",
+    copyLink: "আমন্ত্রণ লিঙ্ক কপি করুন",
+    copiedLink: "কপি হয়েছে!",
+    inviteCodeLabel: "আমন্ত্রণ কোড: {code}",
+    emptyIce: "বরফ ভাঙতে একটি হ্যালো বলুন।",
+    emptyWaiting: "অংশীদারের জন্য অপেক্ষা…",
+    sendFailed: "পাঠাতে ব্যর্থ। সংযোগ পরীক্ষা করুন।",
+    beRespectful: "শ্রদ্ধাশীল থাকুন। পাঠাতে Enter চাপুন। {name}",
+
+    roomClosedTag: "রুম বন্ধ",
+    roomClosedTitle: "এই চ্যাটটি বন্ধ।",
+    roomClosedBody:
+      "হোস্ট রুমটি শেষ করেছেন। চালিয়ে যেতে একটি নতুন রুম তৈরি করুন।",
+    backHomeBtn: "হোমে ফিরে যান",
+    closeRoom: "রুম বন্ধ করুন",
+
+    joinTitle: "একটি ব্যক্তিগত রুমে যোগ দিন",
+    joinBody:
+      "আপনার বন্ধু পাঠানো আমন্ত্রণ কোড বা সম্পূর্ণ URL পেস্ট করুন।",
+    joinPlaceholder: "https://…/room/abc123  বা  abc123",
+    joinSubmit: "রুমে যোগ দিন",
+    joinError:
+      "একটি সম্পূর্ণ আমন্ত্রণ URL বা হোস্টের দেওয়া কোড পেস্ট করুন।",
+
+    confirmLeaveTitle: "এই চ্যাট ছাড়বেন?",
+    confirmLeaveBody:
+      "আপনি এই কথোপকথন থেকে সংযোগ বিচ্ছিন্ন হবেন এবং এটি ফিরিয়ে আনা যাবে না।",
+    confirmLeaveConfirm: "ছেড়ে দিন",
+    confirmLeaveCancel: "থাকুন",
+
+    confirmNextTitle: "নতুন অপরিচিত খুঁজবেন?",
+    confirmNextBody:
+      "আপনার বর্তমান চ্যাট শেষ হবে এবং আপনাকে নতুন কারো সাথে যুক্ত করা হবে।",
+    confirmNextConfirm: "পরবর্তী অপরিচিত",
+    confirmNextCancel: "থাকুন",
+
+    confirmCloseRoomTitle: "এই রুম বন্ধ করবেন?",
+    confirmCloseRoomBody:
+      "এটি আপনার ও আপনার অতিথি উভয়ের চ্যাট শেষ করবে। এটি ফিরিয়ে আনা যাবে না।",
+    confirmCloseRoomConfirm: "রুম বন্ধ করুন",
+    confirmCloseRoomCancel: "খোলা রাখুন",
+
+    loading: "লোড হচ্ছে…",
+    languageLabel: "ভাষা",
+
+    localChatTitle: "লোকাল ট্যাব চ্যাট",
+    localChatBody: "এই পেজটি দুটি ট্যাবে খুলুন (অথবা একই ডিভাইসে বন্ধুর সাথে লিঙ্ক শেয়ার করুন) চ্যাট করতে। মেসেজগুলো আপনার ব্রাউজারে থাকে — সার্ভারে কিছু পাঠানো হয় না।",
+    localChatCta: "লোকাল চ্যাট শুরু করুন ←",
+    localChatJoinPlaceholder: "রুম কী বেছে নিন বা পেস্ট করুন",
+    localChatJoinSubmit: "রুম খুলুন",
+    localChatNewId: "নতুন কী তৈরি করুন",
+    localChatLeave: "ছেড়ে দিন",
+    localChatClearHistory: "ইতিহাস মুছুন",
+    localChatConfirmClearTitle: "সব লোকাল মেসেজ মুছবেন?",
+    localChatConfirmClearBody: "এটি এই ব্রাউজার থেকে এই রুম কী-এর মেসেজ ইতিহাস স্থায়ীভাবে মুছে ফেলবে।",
+    localChatConfirmClearConfirm: "মুছুন",
+    localChatConfirmClearCancel: "বাতিল",
+    localChatTabCount: "{n} ট্যাব",
+    localChatPresenceOnly: "শুধু লোকাল",
+    localChatEmpty: "চ্যাট শুরু করতে এই রুমটি আরেকটি ট্যাবে খুলুন।",
+    localChatRoomFull: "এই রুম পূর্ণ (সর্বোচ্চ ৮ ট্যাব)।",
+    history: "ইতিহাস",
+
+    rejoinTitle: "যেখানে ছেড়েছিলেন সেখান থেকে চালিয়ে যান",
+    rejoinBody: "আপনার একটি চলমান কথোপকথন আছে। চালিয়ে যেতে আবার যোগ দিন বা নতুন শুরু করতে খারিজ করুন।",
+    rejoinStranger: "অপরিচিতের সাথে চ্যাট",
+    rejoinRoom: "ব্যক্তিগত রুম",
+    rejoinCta: "আবার যোগ দিন",
+    rejoinDismiss: "খারিজ করুন",
+    newChat: "নতুন চ্যাট",
+    historySearchPlaceholder: "চ্যাট খুঁজুন…",
+    historyEmpty: "এখনও কোনো চ্যাট নেই। উপরে একটি শুরু করুন।",
+    historyNoMatches: "কোনো মিল নেই।",
+    historyJustNow: "এইমাত্র",
+    historyMinutesAgo: "{n} মিনিট আগে",
+    historyHoursAgo: "{n} ঘণ্টা আগে",
+    historyClearAll: "সব ইতিহাস মুছুন",
+    historyClearConfirm: "সব চ্যাট ইতিহাস মুছবেন?",
+    historyForgetOne: "এই চ্যাট ভুলুন",
+    historyGroupToday: "আজ",
+    historyGroupYesterday: "গতকাল",
+    historyGroupLastWeek: "গত ৭ দিন",
+    historyGroupOlder: "আরও পুরনো",
+    historyLiveBadge: "লাইভ",
+    cryptoHandshakeTitle: "কী বিনিময় হচ্ছে…",
+    cryptoHandshakeBody: "আপনার ও আপনার অংশীদারের মধ্যে এন্ড-টু-এন্ড এনক্রিপশন স্থাপন হচ্ছে। সার্ভার এই কথোপকথন পড়তে পারে না।",
+    cryptoHandshakeStatus: "কী বিনিময় হচ্ছে…",
+    encryptedBadge: "এনক্রিপ্টেড",
+    roomKeyMissingTitle: "আমন্ত্রণ লিঙ্কে এনক্রিপশন কী নেই।",
+    roomKeyMissingBody: "মূল আমন্ত্রণ লিঙ্কটি খুলুন যাতে #key অংশ আছে, অথবা যে ব্রাউজারে রুমটি তৈরি হয়েছিল সেখানে খুলুন।",
+    roomFullTitle: "রুম পূর্ণ",
+    roomFullBody: "এই ব্যক্তিগত রুমে ইতিমধ্যে দুজন অংশগ্রহণকারী আছেন। হোস্টের কাছে নতুন লিঙ্ক চান।",
+    roomAccessErrorTitle: "এই রুম খোলা যাচ্ছে না",
+    roomAccessErrorBody: "রুম বন্ধ হয়েছে বা এই আমন্ত্রণ আর বৈধ নয়।",
+  },
+
+  pt: {
+    appName: "Chatterbox",
+    tagline: "Chat aleatório só de texto",
+    heroTitle1: "Converse com um estranho.",
+    heroTitle2: "Ou convide um amigo.",
+    heroBody:
+      "Crie uma sala privada com um link compartilhável, ou entre na roleta e seja pareado com alguém aleatório de qualquer lugar. Sem contas, apenas um nome e uma janela de chat.",
+    strangerTitle: "Roleta de estranhos",
+    strangerBody:
+      "Vamos parear você com alguém aleatório. Pule quando quiser.",
+    strangerCta: "Começar a conversar →",
+    roomTitle: "Sala privada",
+    roomBody:
+      "Crie uma sala, compartilhe o link com um amigo e conversem diretamente. Sem pareamentos aleatórios.",
+    createRoom: "Criar nova sala",
+    creatingRoom: "Criando…",
+    joinRoomLink: "Tem um código de convite? Entrar →",
+    footerNote:
+      "Seja gentil. Sem contas, sem histórico fora desta sessão.",
+    anonymous: "Chat anônimo",
+    youAre: "Você é",
+    backHome: "← Voltar ao início",
+
+    searchingTag: "Roleta de estranhos",
+    searchingTitle: "Procurando alguém…",
+    searchingBody:
+      "Aguarde. Vamos parear você assim que outro chatter entrar.",
+    searchingStatus: "Procurando na fila…",
+
+    chatTitleDefault: "Chat com estranho",
+    chatTitleWith: "Conversando com {name}",
+    chatSubtitle: "Chat anônimo 1 a 1",
+    statusConnected: "Conectado",
+    statusPartnerLeft: "Parceiro desconectou",
+    statusWaiting: "Aguardando convidado",
+    serviceUnavailable: "Serviço indisponível",
+    partnerLabel: "Estranho",
+    partnerLeftMsg: "{label} desconectou.",
+    inputPlaceholder: "Diga algo gentil…",
+    inputPlaceholderConnected: "Digite uma mensagem…",
+    inputPlaceholderWaiting: "Aguardando alguém entrar…",
+    sendBtn: "Enviar",
+    sendingBtn: "…",
+    leaveBtn: "Sair",
+    nextBtn: "Próximo estranho",
+    copyLink: "Copiar link de convite",
+    copiedLink: "Copiado!",
+    inviteCodeLabel: "Código de convite: {code}",
+    emptyIce: "Diga oi para quebrar o gelo.",
+    emptyWaiting: "Aguardando um parceiro…",
+    sendFailed: "Falha ao enviar. Verifique sua conexão.",
+    beRespectful: "Seja respeitoso. Pressione Enter para enviar. {name}",
+
+    roomClosedTag: "Sala fechada",
+    roomClosedTitle: "Este chat está fechado.",
+    roomClosedBody:
+      "O anfitrião encerrou a sala. Crie uma nova para continuar conversando.",
+    backHomeBtn: "Voltar ao início",
+    closeRoom: "Fechar sala",
+
+    joinTitle: "Entrar em uma sala privada",
+    joinBody:
+      "Cole o código de convite ou a URL completa enviada pelo seu amigo.",
+    joinPlaceholder: "https://…/room/abc123  ou  abc123",
+    joinSubmit: "Entrar na sala",
+    joinError:
+      "Cole uma URL de convite completa ou o código dado pelo anfitrião.",
+
+    confirmLeaveTitle: "Sair deste chat?",
+    confirmLeaveBody:
+      "Você será desconectado desta conversa e não dá para desfazer.",
+    confirmLeaveConfirm: "Sair",
+    confirmLeaveCancel: "Ficar",
+
+    confirmNextTitle: "Encontrar um novo estranho?",
+    confirmNextBody:
+      "Seu chat atual vai acabar e você será pareado com alguém novo.",
+    confirmNextConfirm: "Próximo estranho",
+    confirmNextCancel: "Ficar",
+
+    confirmCloseRoomTitle: "Fechar esta sala?",
+    confirmCloseRoomBody:
+      "Isso vai encerrar o chat para você e seu convidado. Não dá para desfazer.",
+    confirmCloseRoomConfirm: "Fechar sala",
+    confirmCloseRoomCancel: "Manter aberta",
+
+    loading: "Carregando…",
+    languageLabel: "Idioma",
+
+    localChatTitle: "Chat local entre abas",
+    localChatBody: "Abra esta página em duas abas (ou compartilhe o link com alguém no mesmo dispositivo) para conversar. As mensagens ficam no seu navegador — nada é enviado ao servidor.",
+    localChatCta: "Iniciar um chat local →",
+    localChatJoinPlaceholder: "Escolha ou cole uma chave de sala",
+    localChatJoinSubmit: "Abrir sala",
+    localChatNewId: "Gerar nova chave",
+    localChatLeave: "Sair",
+    localChatClearHistory: "Limpar histórico",
+    localChatConfirmClearTitle: "Limpar todas as mensagens locais?",
+    localChatConfirmClearBody: "Isso removerá permanentemente o histórico de mensagens desta sala neste navegador.",
+    localChatConfirmClearConfirm: "Limpar",
+    localChatConfirmClearCancel: "Cancelar",
+    localChatTabCount: "{n} aba(s)",
+    localChatPresenceOnly: "Apenas local",
+    localChatEmpty: "Abra esta sala em outra aba para começar a conversar.",
+    localChatRoomFull: "Esta sala está cheia (máx. 8 abas).",
+    history: "Histórico",
+
+    rejoinTitle: "Continue de onde parou",
+    rejoinBody: "Você tem uma conversa em andamento. Entre novamente para continuar ou descarte para começar de novo.",
+    rejoinStranger: "Chat com estranho",
+    rejoinRoom: "Sala privada",
+    rejoinCta: "Reentrar",
+    rejoinDismiss: "Descartar",
+    newChat: "Novo chat",
+    historySearchPlaceholder: "Buscar chats…",
+    historyEmpty: "Ainda não há chats. Comece um acima.",
+    historyNoMatches: "Sem resultados.",
+    historyJustNow: "agora",
+    historyMinutesAgo: "há {n}m",
+    historyHoursAgo: "há {n}h",
+    historyClearAll: "Limpar todo o histórico",
+    historyClearConfirm: "Limpar todo o histórico de chats?",
+    historyForgetOne: "Esquecer este chat",
+    historyGroupToday: "Hoje",
+    historyGroupYesterday: "Ontem",
+    historyGroupLastWeek: "Últimos 7 dias",
+    historyGroupOlder: "Mais antigos",
+    historyLiveBadge: "ativo",
+    cryptoHandshakeTitle: "Trocando chaves…",
+    cryptoHandshakeBody: "Configurando a criptografia de ponta a ponta entre você e seu parceiro. O servidor não consegue ler esta conversa.",
+    cryptoHandshakeStatus: "Trocando chaves…",
+    encryptedBadge: "Criptografado",
+    roomKeyMissingTitle: "O link de convite não tem a chave de criptografia.",
+    roomKeyMissingBody: "Abra o link original com o fragmento #key ou use esta sala no navegador em que foi criada.",
+    roomFullTitle: "A sala está cheia",
+    roomFullBody: "Esta sala privada já tem dois participantes. Peça um novo link ao anfitrião.",
+    roomAccessErrorTitle: "Não é possível abrir esta sala",
+    roomAccessErrorBody: "A sala foi encerrada ou este convite não é mais válido.",
+  },
+
+  ru: {
+    appName: "Chatterbox",
+    tagline: "Текстовый чат-рулетка",
+    heroTitle1: "Поговори с незнакомцем.",
+    heroTitle2: "Или пригласи друга.",
+    heroBody:
+      "Создайте приватную комнату со ссылкой или зайдите в рулетку и общайтесь со случайным человеком откуда угодно. Без аккаунтов — только имя и окно чата.",
+    strangerTitle: "Рулетка незнакомцев",
+    strangerBody:
+      "Мы подберём случайного собеседника. Можно пропустить в любой момент.",
+    strangerCta: "Начать чат →",
+    roomTitle: "Приватная комната",
+    roomBody:
+      "Создайте комнату, поделитесь ссылкой с другом и общайтесь напрямую. Без случайных пар.",
+    createRoom: "Создать комнату",
+    creatingRoom: "Создаём…",
+    joinRoomLink: "Есть код приглашения? Войти →",
+    footerNote:
+      "Будьте добры. Без аккаунтов, без истории за пределами сессии.",
+    anonymous: "Анонимный чат",
+    youAre: "Вы",
+    backHome: "← На главную",
+
+    searchingTag: "Рулетка незнакомцев",
+    searchingTitle: "Ищем кого-нибудь…",
+    searchingBody:
+      "Подождите. Мы подключим вас, как только появится другой собеседник.",
+    searchingStatus: "Поиск в очереди…",
+
+    chatTitleDefault: "Чат с незнакомцем",
+    chatTitleWith: "Чат с {name}",
+    chatSubtitle: "Анонимный чат 1-на-1",
+    statusConnected: "Подключено",
+    statusPartnerLeft: "Собеседник отключился",
+    statusWaiting: "Ждём гостя",
+    serviceUnavailable: "Сервис недоступен",
+    partnerLabel: "Незнакомец",
+    partnerLeftMsg: "{label} отключился.",
+    inputPlaceholder: "Скажите что-нибудь приятное…",
+    inputPlaceholderConnected: "Введите сообщение…",
+    inputPlaceholderWaiting: "Ждём, пока кто-то войдёт…",
+    sendBtn: "Отправить",
+    sendingBtn: "…",
+    leaveBtn: "Выйти",
+    nextBtn: "Следующий",
+    copyLink: "Скопировать ссылку",
+    copiedLink: "Скопировано!",
+    inviteCodeLabel: "Код приглашения: {code}",
+    emptyIce: "Поздоровайтесь, чтобы начать разговор.",
+    emptyWaiting: "Ждём собеседника…",
+    sendFailed: "Не удалось отправить. Проверьте соединение.",
+    beRespectful: "Будьте вежливы. Enter — отправить. {name}",
+
+    roomClosedTag: "Комната закрыта",
+    roomClosedTitle: "Этот чат закрыт.",
+    roomClosedBody:
+      "Хост закрыл комнату. Создайте новую, чтобы продолжить.",
+    backHomeBtn: "На главную",
+    closeRoom: "Закрыть комнату",
+
+    joinTitle: "Войти в приватную комнату",
+    joinBody:
+      "Вставьте код приглашения или полный URL, который прислал вам друг.",
+    joinPlaceholder: "https://…/room/abc123  или  abc123",
+    joinSubmit: "Войти в комнату",
+    joinError:
+      "Вставьте полный URL-приглашение или код, выданный хостом.",
+
+    confirmLeaveTitle: "Покинуть этот чат?",
+    confirmLeaveBody:
+      "Вы будете отключены от разговора. Это нельзя отменить.",
+    confirmLeaveConfirm: "Выйти",
+    confirmLeaveCancel: "Остаться",
+
+    confirmNextTitle: "Найти нового собеседника?",
+    confirmNextBody:
+      "Текущий чат завершится, и мы подключим вас к кому-то новому.",
+    confirmNextConfirm: "Следующий",
+    confirmNextCancel: "Остаться",
+
+    confirmCloseRoomTitle: "Закрыть эту комнату?",
+    confirmCloseRoomBody:
+      "Это завершит чат для вас и вашего гостя. Отменить нельзя.",
+    confirmCloseRoomConfirm: "Закрыть комнату",
+    confirmCloseRoomCancel: "Оставить открытой",
+
+    loading: "Загрузка…",
+    languageLabel: "Язык",
+
+    localChatTitle: "Локальный чат между вкладками",
+    localChatBody: "Откройте эту страницу в двух вкладках (или поделитесь ссылкой на том же устройстве), чтобы общаться. Сообщения остаются в браузере — на сервер ничего не отправляется.",
+    localChatCta: "Начать локальный чат →",
+    localChatJoinPlaceholder: "Выберите или вставьте ключ комнаты",
+    localChatJoinSubmit: "Открыть комнату",
+    localChatNewId: "Создать ключ",
+    localChatLeave: "Выйти",
+    localChatClearHistory: "Очистить историю",
+    localChatConfirmClearTitle: "Очистить все локальные сообщения?",
+    localChatConfirmClearBody: "Это навсегда удалит историю сообщений для этого ключа в этом браузере.",
+    localChatConfirmClearConfirm: "Очистить",
+    localChatConfirmClearCancel: "Отмена",
+    localChatTabCount: "{n} вкладка(ок)",
+    localChatPresenceOnly: "Только локально",
+    localChatEmpty: "Откройте эту комнату в другой вкладке, чтобы начать общение.",
+    localChatRoomFull: "Комната заполнена (макс. 8 вкладок).",
+    history: "История",
+
+    rejoinTitle: "Продолжите с того места",
+    rejoinBody: "У вас есть активный разговор. Вернитесь или отклоните, чтобы начать заново.",
+    rejoinStranger: "Чат с незнакомцем",
+    rejoinRoom: "Приватная комната",
+    rejoinCta: "Вернуться",
+    rejoinDismiss: "Отклонить",
+    newChat: "Новый чат",
+    historySearchPlaceholder: "Поиск по чатам…",
+    historyEmpty: "Чатов пока нет. Начните выше.",
+    historyNoMatches: "Ничего не найдено.",
+    historyJustNow: "только что",
+    historyMinutesAgo: "{n} мин назад",
+    historyHoursAgo: "{n} ч назад",
+    historyClearAll: "Очистить всю историю",
+    historyClearConfirm: "Очистить всю историю чатов?",
+    historyForgetOne: "Забыть этот чат",
+    historyGroupToday: "Сегодня",
+    historyGroupYesterday: "Вчера",
+    historyGroupLastWeek: "Последние 7 дней",
+    historyGroupOlder: "Ранее",
+    historyLiveBadge: "активно",
+    cryptoHandshakeTitle: "Обмен ключами…",
+    cryptoHandshakeBody: "Настраиваем сквозное шифрование между вами и вашим собеседником. Сервер не может читать этот разговор.",
+    cryptoHandshakeStatus: "Обмен ключами…",
+    encryptedBadge: "Зашифровано",
+    roomKeyMissingTitle: "В ссылке-приглашении отсутствует ключ шифрования.",
+    roomKeyMissingBody: "Откройте исходную ссылку с фрагментом #key или эту комнату в браузере, где она была создана.",
+    roomFullTitle: "Комната заполнена",
+    roomFullBody: "В этой приватной комнате уже два участника. Попросите у хоста новую ссылку.",
+    roomAccessErrorTitle: "Не удалось открыть комнату",
+    roomAccessErrorBody: "Комната закрыта или приглашение больше недействительно.",
+  },
+
+  ur: {
+    appName: "Chatterbox",
+    tagline: "متن پر مبنی رینڈم چیٹ",
+    heroTitle1: "ایک اجنبی سے بات کریں۔",
+    heroTitle2: "یا کسی دوست کو مدعو کریں۔",
+    heroBody:
+      "ایک شیئر ایبل لنک کے ساتھ نجی روم بنائیں، یا رولیٹ میں شامل ہو کر کسی بھی جگہ سے ایک بے ترتیب شخص سے جڑیں۔ اکاؤنٹس نہیں، صرف ایک نام اور چیٹ ونڈو۔",
+    strangerTitle: "اجنبی رولیٹ",
+    strangerBody: "ہم آپ کو ایک بے ترتیب شخص سے جوڑیں گے۔ کسی بھی وقت چھوڑ سکتے ہیں۔",
+    strangerCta: "چیٹ شروع کریں ←",
+    roomTitle: "نجی روم",
+    roomBody:
+      "روم بنائیں، دوست کے لیے لنک شیئر کریں اور براہ راست چیٹ کریں۔ کوئی بے ترتیب جوڑا نہیں۔",
+    createRoom: "نیا روم بنائیں",
+    creatingRoom: "بنایا جا رہا ہے…",
+    joinRoomLink: "دعوت نامہ کوڈ ہے؟ شامل ہوں ←",
+    footerNote: "مہربان رہیں۔ اکاؤنٹس نہیں، اس سیشن سے باہر کوئی تاریخ نہیں۔",
+    anonymous: "گمنام چیٹ",
+    youAre: "آپ ہیں",
+    backHome: "← ہوم پر واپس",
+
+    searchingTag: "اجنبی رولیٹ",
+    searchingTitle: "کسی کو تلاش کر رہے ہیں…",
+    searchingBody: "تھوڑا انتظار کریں۔ جیسے ہی کوئی اور آئے گا ہم آپ کو جوڑ دیں گے۔",
+    searchingStatus: "قطار میں تلاش…",
+
+    chatTitleDefault: "اجنبی سے چیٹ",
+    chatTitleWith: "{name} سے چیٹ",
+    chatSubtitle: "گمنام ایک کے ساتھ ایک چیٹ",
+    statusConnected: "منسلک",
+    statusPartnerLeft: "ساتھی چھوڑ گیا",
+    statusWaiting: "مہمان کا انتظار",
+    serviceUnavailable: "سروس دستیاب نہیں",
+    partnerLabel: "اجنبی",
+    partnerLeftMsg: "{label} منقطع ہو گیا۔",
+    inputPlaceholder: "کچھ اچھا کہیں…",
+    inputPlaceholderConnected: "پیغام لکھیں…",
+    inputPlaceholderWaiting: "کسی کے شامل ہونے کا انتظار…",
+    sendBtn: "بھیجیں",
+    sendingBtn: "…",
+    leaveBtn: "چھوڑیں",
+    nextBtn: "اگلا اجنبی",
+    copyLink: "دعوت لنک کاپی کریں",
+    copiedLink: "کاپی ہو گیا!",
+    inviteCodeLabel: "دعوت نامہ کوڈ: {code}",
+    emptyIce: "بات شروع کرنے کے لیے ہیلو کہیں۔",
+    emptyWaiting: "ساتھی کا انتظار…",
+    sendFailed: "بھیجنا ناکام۔ کنکشن چیک کریں۔",
+    beRespectful: "محترم رہیں۔ بھیجنے کے لیے Enter دبائیں۔ {name}",
+
+    roomClosedTag: "روم بند",
+    roomClosedTitle: "یہ چیٹ بند ہے۔",
+    roomClosedBody:
+      "میزبان نے روم ختم کر دیا۔ جاری رکھنے کے لیے نیا بنائیں۔",
+    backHomeBtn: "ہوم پر واپس",
+    closeRoom: "روم بند کریں",
+
+    joinTitle: "نجی روم میں شامل ہوں",
+    joinBody:
+      "اپنے دوست کا بھیجا ہوا دعوت نامہ کوڈ یا مکمل URL پیسٹ کریں۔",
+    joinPlaceholder: "https://…/room/abc123  یا  abc123",
+    joinSubmit: "روم میں شامل ہوں",
+    joinError:
+      "مکمل دعوت URL یا میزبان کا دیا ہوا کوڈ پیسٹ کریں۔",
+
+    confirmLeaveTitle: "اس چیٹ سے چلے جائیں؟",
+    confirmLeaveBody:
+      "آپ اس گفتگو سے منقطع ہو جائیں گے اور یہ واپس نہیں ہو سکتا۔",
+    confirmLeaveConfirm: "چھوڑیں",
+    confirmLeaveCancel: "رکیں",
+
+    confirmNextTitle: "نیا اجنبی تلاش کریں؟",
+    confirmNextBody:
+      "آپ کی موجودہ چیٹ ختم ہو جائے گی اور آپ کو کسی نئے شخص سے جوڑ دیا جائے گا۔",
+    confirmNextConfirm: "اگلا اجنبی",
+    confirmNextCancel: "رکیں",
+
+    confirmCloseRoomTitle: "یہ روم بند کریں؟",
+    confirmCloseRoomBody:
+      "یہ آپ کی اور آپ کے مہمان دونوں کی چیٹ ختم کر دے گا۔ یہ واپس نہیں ہو سکتا۔",
+    confirmCloseRoomConfirm: "روم بند کریں",
+    confirmCloseRoomCancel: "کھلا رہنے دیں",
+
+    loading: "لوڈ ہو رہا ہے…",
+    languageLabel: "زبان",
+
+    localChatTitle: "مقامی ٹیب چیٹ",
+    localChatBody: "اس صفحے کو دو ٹیبز میں کھولیں (یا اسی ڈیوائس پر دوست کے ساتھ لنک شیئر کریں) تاکہ چیٹ کر سکیں۔ پیغامات آپ کے براؤزر میں رہتے ہیں — سرور پر کچھ نہیں بھیجا جاتا۔",
+    localChatCta: "مقامی چیٹ شروع کریں ←",
+    localChatJoinPlaceholder: "روم کی چنیں یا پیسٹ کریں",
+    localChatJoinSubmit: "روم کھولیں",
+    localChatNewId: "نئی کلید بنائیں",
+    localChatLeave: "چھوڑیں",
+    localChatClearHistory: "تاریخ صاف کریں",
+    localChatConfirmClearTitle: "تمام مقامی پیغامات صاف کریں؟",
+    localChatConfirmClearBody: "یہ اس براؤزر سے اس روم کلید کی پیغام تاریخ مستقل طور پر ہٹا دے گا۔",
+    localChatConfirmClearConfirm: "صاف کریں",
+    localChatConfirmClearCancel: "منسوخ",
+    localChatTabCount: "{n} ٹیب",
+    localChatPresenceOnly: "صرف مقامی",
+    localChatEmpty: "چیٹ شروع کرنے کے لیے اس روم کو دوسرے ٹیب میں کھولیں۔",
+    localChatRoomFull: "یہ روم بھرا ہوا ہے (زیادہ سے زیادہ 8 ٹیبز)۔",
+    history: "تاریخ",
+
+    rejoinTitle: "جہاں چھوڑا وہاں سے جاری رکھیں",
+    rejoinBody: "آپ کی ایک جاری گفتگو ہے۔ دوبارہ شامل ہوں یا نئے سرے سے شروع کرنے کے لیے نظر انداز کریں۔",
+    rejoinStranger: "اجنبی سے چیٹ",
+    rejoinRoom: "نجی روم",
+    rejoinCta: "دوبارہ شامل ہوں",
+    rejoinDismiss: "نظر انداز کریں",
+    newChat: "نئی چیٹ",
+    historySearchPlaceholder: "چیٹس تلاش کریں…",
+    historyEmpty: "ابھی تک کوئی چیٹ نہیں۔ اوپر شروع کریں۔",
+    historyNoMatches: "کوئی میل نہیں۔",
+    historyJustNow: "ابھی ابھی",
+    historyMinutesAgo: "{n} منٹ پہلے",
+    historyHoursAgo: "{n} گھنٹے پہلے",
+    historyClearAll: "ساری تاریخ صاف کریں",
+    historyClearConfirm: "کیا ساری چیٹ تاریخ صاف کریں؟",
+    historyForgetOne: "اس چیٹ کو بھولیں",
+    historyGroupToday: "آج",
+    historyGroupYesterday: "کل",
+    historyGroupLastWeek: "پچھلے 7 دن",
+    historyGroupOlder: "پرانے",
+    historyLiveBadge: "لائیو",
+    cryptoHandshakeTitle: "کلیدیں بدلی جا رہی ہیں…",
+    cryptoHandshakeBody: "آپ کے اور ساتھی کے درمیان اینڈ ٹو اینڈ انکرپشن قائم ہو رہی ہے۔ سرور یہ گفتگو نہیں پڑھ سکتا۔",
+    cryptoHandshakeStatus: "کلیدیں بدلی جا رہی ہیں…",
+    encryptedBadge: "خفیہ کردہ",
+    roomKeyMissingTitle: "دعوت کے لنک میں انکرپشن کلید نہیں ہے۔",
+    roomKeyMissingBody: "اصل دعوت کا لنک کھولیں جس میں #key حصہ ہو، یا اسی براؤزر میں یہ روم کھولیں جہاں بنایا گیا تھا۔",
+    roomFullTitle: "روم بھرا ہوا ہے",
+    roomFullBody: "اس نجی روم میں پہلے سے دو شرکاء ہیں۔ میزبان سے نیا لنک مانگیں۔",
+    roomAccessErrorTitle: "یہ روم نہیں کھل سکتا",
+    roomAccessErrorBody: "روم بند ہو چکا ہے یا یہ دعوت اب درست نہیں۔",
+  },
+
+  id: {
+    appName: "Chatterbox",
+    tagline: "Chat roulette berbasis teks",
+    heroTitle1: "Ngobrol dengan orang asing.",
+    heroTitle2: "Atau ajak teman.",
+    heroBody:
+      "Buat ruangan pribadi dengan tautan yang bisa dibagikan, atau masuk ke roulette dan dipasangkan dengan orang acak dari mana saja. Tanpa akun, cukup nama dan jendela chat.",
+    strangerTitle: "Roulette orang asing",
+    strangerBody:
+      "Kami akan memasangkan Anda dengan orang acak. Lewati kapan pun.",
+    strangerCta: "Mulai mengobrol →",
+    roomTitle: "Ruangan pribadi",
+    roomBody:
+      "Buat ruangan, bagikan tautan dengan teman, dan ngobrol langsung. Tanpa pemasangan acak.",
+    createRoom: "Buat ruangan baru",
+    creatingRoom: "Membuat…",
+    joinRoomLink: "Punya kode undangan? Gabung →",
+    footerNote:
+      "Jadilah baik. Tanpa akun, tanpa riwayat di luar sesi ini.",
+    anonymous: "Chat anonim",
+    youAre: "Anda adalah",
+    backHome: "← Kembali ke beranda",
+
+    searchingTag: "Roulette orang asing",
+    searchingTitle: "Mencari seseorang…",
+    searchingBody:
+      "Tunggu sebentar. Kami akan memasangkan Anda saat ada chatter lain yang masuk.",
+    searchingStatus: "Mencari di antrean…",
+
+    chatTitleDefault: "Chat dengan orang asing",
+    chatTitleWith: "Mengobrol dengan {name}",
+    chatSubtitle: "Chat anonim 1-law-1",
+    statusConnected: "Terhubung",
+    statusPartnerLeft: "Mitra terputus",
+    statusWaiting: "Menunggu tamu",
+    serviceUnavailable: "Layanan tidak tersedia",
+    partnerLabel: "Orang asing",
+    partnerLeftMsg: "{label} telah terputus.",
+    inputPlaceholder: "Sampaikan sesuatu yang baik…",
+    inputPlaceholderConnected: "Ketik pesan…",
+    inputPlaceholderWaiting: "Menunggu seseorang bergabung…",
+    sendBtn: "Kirim",
+    sendingBtn: "…",
+    leaveBtn: "Keluar",
+    nextBtn: "Orang asing berikutnya",
+    copyLink: "Salin tautan undangan",
+    copiedLink: "Tersalin!",
+    inviteCodeLabel: "Kode undangan: {code}",
+    emptyIce: "Sapa untuk memulai percakapan.",
+    emptyWaiting: "Menunggu mitra…",
+    sendFailed: "Gagal mengirim. Periksa koneksi Anda.",
+    beRespectful: "Bersikaplah hormat. Tekan Enter untuk mengirim. {name}",
+
+    roomClosedTag: "Ruangan ditutup",
+    roomClosedTitle: "Chat ini ditutup.",
+    roomClosedBody:
+      "Tuan rumah mengakhiri ruangan. Buat yang baru untuk melanjutkan.",
+    backHomeBtn: "Kembali ke beranda",
+    closeRoom: "Tutup ruangan",
+
+    joinTitle: "Bergabung dengan ruangan pribadi",
+    joinBody:
+      "Tempelkan kode undangan atau URL lengkap yang dikirimkannya.",
+    joinPlaceholder: "https://…/room/abc123  atau  abc123",
+    joinSubmit: "Gabung ruangan",
+    joinError:
+      "Tempelkan URL lengkap atau kode yang diberikan tuan rumah.",
+
+    confirmLeaveTitle: "Keluar dari chat ini?",
+    confirmLeaveBody:
+      "Anda akan terputus dari percakapan ini dan tidak dapat dibatalkan.",
+    confirmLeaveConfirm: "Keluar",
+    confirmLeaveCancel: "Tetap",
+
+    confirmNextTitle: "Cari orang asing baru?",
+    confirmNextBody:
+      "Chat Anda saat ini akan berakhir dan Anda akan dipasangkan dengan orang baru.",
+    confirmNextConfirm: "Orang asing berikutnya",
+    confirmNextCancel: "Tetap",
+
+    confirmCloseRoomTitle: "Tutup ruangan ini?",
+    confirmCloseRoomBody:
+      "Ini akan mengakhiri chat untuk Anda dan tamu Anda. Tidak dapat dibatalkan.",
+    confirmCloseRoomConfirm: "Tutup ruangan",
+    confirmCloseRoomCancel: "Tetap buka",
+
+    loading: "Memuat…",
+    languageLabel: "Bahasa",
+
+    localChatTitle: "Obrolan tab lokal",
+    localChatBody: "Buka halaman ini di dua tab (atau bagikan tautan dengan teman di perangkat yang sama) untuk mengobrol. Pesan tetap di browser Anda — tidak ada yang dikirim ke server.",
+    localChatCta: "Mulai obrolan lokal →",
+    localChatJoinPlaceholder: "Pilih atau tempel kunci ruangan",
+    localChatJoinSubmit: "Buka ruangan",
+    localChatNewId: "Buat kunci baru",
+    localChatLeave: "Keluar",
+    localChatClearHistory: "Hapus riwayat",
+    localChatConfirmClearTitle: "Hapus semua pesan lokal?",
+    localChatConfirmClearBody: "Ini akan menghapus permanen riwayat pesan ruangan ini dari browser ini.",
+    localChatConfirmClearConfirm: "Hapus",
+    localChatConfirmClearCancel: "Batal",
+    localChatTabCount: "{n} tab",
+    localChatPresenceOnly: "Lokal saja",
+    localChatEmpty: "Buka ruangan ini di tab lain untuk mulai mengobrol.",
+    localChatRoomFull: "Ruangan ini penuh (maks. 8 tab).",
+    history: "Riwayat",
+
+    rejoinTitle: "Lanjutkan dari yang terakhir",
+    rejoinBody: "Anda punya percakapan yang sedang berjalan. Bergabung lagi untuk melanjutkan, atau abaikan untuk mulai baru.",
+    rejoinStranger: "Chat orang asing",
+    rejoinRoom: "Ruangan pribadi",
+    rejoinCta: "Bergabung lagi",
+    rejoinDismiss: "Abaikan",
+    newChat: "Obrolan baru",
+    historySearchPlaceholder: "Cari obrolan…",
+    historyEmpty: "Belum ada obrolan. Mulai di atas.",
+    historyNoMatches: "Tidak ada hasil.",
+    historyJustNow: "baru saja",
+    historyMinutesAgo: "{n}m lalu",
+    historyHoursAgo: "{n}j lalu",
+    historyClearAll: "Hapus semua riwayat",
+    historyClearConfirm: "Hapus semua riwayat obrolan?",
+    historyForgetOne: "Lupakan obrolan ini",
+    historyGroupToday: "Hari ini",
+    historyGroupYesterday: "Kemarin",
+    historyGroupLastWeek: "7 hari terakhir",
+    historyGroupOlder: "Lebih lama",
+    historyLiveBadge: "aktif",
+    cryptoHandshakeTitle: "Menukar kunci…",
+    cryptoHandshakeBody: "Menyiapkan enkripsi ujung-ke-ujung antara Anda dan pasangan. Server tidak dapat membaca percakapan ini.",
+    cryptoHandshakeStatus: "Menukar kunci…",
+    encryptedBadge: "Terenkripsi",
+    roomKeyMissingTitle: "Tautan undangan tidak memiliki kunci enkripsi.",
+    roomKeyMissingBody: "Buka tautan undangan asli yang memiliki fragmen #key, atau buka ruangan ini di browser tempat ruangan dibuat.",
+    roomFullTitle: "Ruangan penuh",
+    roomFullBody: "Ruangan pribadi ini sudah memiliki dua peserta. Minta tautan baru kepada tuan rumah.",
+    roomAccessErrorTitle: "Tidak dapat membuka ruangan ini",
+    roomAccessErrorBody: "Ruangan ditutup atau undangan ini tidak lagi berlaku.",
+  },
+
+  de: {
+    appName: "Chatterbox",
+    tagline: "Textbasierte Chat-Roulette",
+    heroTitle1: "Sprich mit einem Fremden.",
+    heroTitle2: "Oder lade einen Freund ein.",
+    heroBody:
+      "Erstelle einen privaten Raum mit teilbarem Link oder steig in die Roulette ein und werde mit jemandem Zufälligem verbunden. Keine Konten, nur ein Name und ein Chat-Fenster.",
+    strangerTitle: "Fremden-Roulette",
+    strangerBody:
+      "Wir koppeln dich mit einer zufälligen Person. Überspringen jederzeit möglich.",
+    strangerCta: "Chat starten →",
+    roomTitle: "Privater Raum",
+    roomBody:
+      "Erstelle einen Raum, teile den Link mit einem Freund und chattet zusammen. Keine zufälligen Paarungen.",
+    createRoom: "Neuen Raum erstellen",
+    creatingRoom: "Erstellen…",
+    joinRoomLink: "Du hast einen Einladungscode? Beitreten →",
+    footerNote:
+      "Sei freundlich. Keine Konten, kein Verlauf außerhalb dieser Sitzung.",
+    anonymous: "Anonymer Chat",
+    youAre: "Du bist",
+    backHome: "← Zurück zur Startseite",
+
+    searchingTag: "Fremden-Roulette",
+    searchingTitle: "Suche jemanden…",
+    searchingBody:
+      "Einen Moment. Wir koppeln dich, sobald jemand anderes beitritt.",
+    searchingStatus: "Suche in der Warteschlange…",
+
+    chatTitleDefault: "Fremden-Chat",
+    chatTitleWith: "Chatten mit {name}",
+    chatSubtitle: "Anonymer 1-zu-1-Chat",
+    statusConnected: "Verbunden",
+    statusPartnerLeft: "Partner getrennt",
+    statusWaiting: "Warte auf Gast",
+    serviceUnavailable: "Dienst nicht verfügbar",
+    partnerLabel: "Fremde",
+    partnerLeftMsg: "{label} hat die Verbindung getrennt.",
+    inputPlaceholder: "Sag etwas Nettes…",
+    inputPlaceholderConnected: "Nachricht eingeben…",
+    inputPlaceholderWaiting: "Warte auf Beitritt…",
+    sendBtn: "Senden",
+    sendingBtn: "…",
+    leaveBtn: "Verlassen",
+    nextBtn: "Nächster Fremder",
+    copyLink: "Einladungslink kopieren",
+    copiedLink: "Kopiert!",
+    inviteCodeLabel: "Einladungscode: {code}",
+    emptyIce: "Sag hallo, um das Eis zu brechen.",
+    emptyWaiting: "Warte auf Partner…",
+    sendFailed: "Senden fehlgeschlagen. Prüfe deine Verbindung.",
+    beRespectful: "Sei respektvoll. Enter zum Senden. {name}",
+
+    roomClosedTag: "Raum geschlossen",
+    roomClosedTitle: "Dieser Chat ist beendet.",
+    roomClosedBody:
+      "Der Host hat den Raum beendet. Erstelle einen neuen, um weiterzuchatten.",
+    backHomeBtn: "Zurück zur Startseite",
+    closeRoom: "Raum schließen",
+
+    joinTitle: "Privatem Raum beitreten",
+    joinBody:
+      "Füge den Einladungscode oder die vollständige URL ein, die dein Freund gesendet hat.",
+    joinPlaceholder: "https://…/room/abc123  oder  abc123",
+    joinSubmit: "Raum beitreten",
+    joinError:
+      "Füge eine vollständige Einladungs-URL oder den Code des Hosts ein.",
+
+    confirmLeaveTitle: "Diesen Chat verlassen?",
+    confirmLeaveBody:
+      "Du wirst vom Gespräch getrennt. Dies kann nicht rückgängig gemacht werden.",
+    confirmLeaveConfirm: "Verlassen",
+    confirmLeaveCancel: "Bleiben",
+
+    confirmNextTitle: "Neuen Fremden finden?",
+    confirmNextBody:
+      "Dein aktueller Chat endet und du wirst mit jemand Neuem verbunden.",
+    confirmNextConfirm: "Nächster Fremder",
+    confirmNextCancel: "Bleiben",
+
+    confirmCloseRoomTitle: "Diesen Raum schließen?",
+    confirmCloseRoomBody:
+      "Das beendet den Chat für dich und deinen Gast. Nicht rückgängig zu machen.",
+    confirmCloseRoomConfirm: "Raum schließen",
+    confirmCloseRoomCancel: "Offen lassen",
+
+    loading: "Lädt…",
+    languageLabel: "Sprache",
+
+    localChatTitle: "Lokaler Tab-Chat",
+    localChatBody: "Öffne diese Seite in zwei Tabs (oder teile den Link mit jemandem auf demselben Gerät), um zu chatten. Nachrichten bleiben in deinem Browser — nichts wird an den Server gesendet.",
+    localChatCta: "Lokalen Chat starten →",
+    localChatJoinPlaceholder: "Wähle oder füge einen Raumschlüssel ein",
+    localChatJoinSubmit: "Raum öffnen",
+    localChatNewId: "Neuen Schlüssel erzeugen",
+    localChatLeave: "Verlassen",
+    localChatClearHistory: "Verlauf löschen",
+    localChatConfirmClearTitle: "Alle lokalen Nachrichten löschen?",
+    localChatConfirmClearBody: "Dadurch wird der Nachrichtenverlauf dieses Raumschlüssels in diesem Browser dauerhaft entfernt.",
+    localChatConfirmClearConfirm: "Löschen",
+    localChatConfirmClearCancel: "Abbrechen",
+    localChatTabCount: "{n} Tab(s)",
+    localChatPresenceOnly: "Nur lokal",
+    localChatEmpty: "Öffne diesen Raum in einem anderen Tab, um zu chatten.",
+    localChatRoomFull: "Dieser Raum ist voll (max. 8 Tabs).",
+    history: "Verlauf",
+
+    rejoinTitle: "Weitermachen, wo du aufgehört hast",
+    rejoinBody: "Du hast eine laufende Unterhaltung. Tritt erneut bei oder verwerfe, um neu zu starten.",
+    rejoinStranger: "Fremden-Chat",
+    rejoinRoom: "Privater Raum",
+    rejoinCta: "Erneut beitreten",
+    rejoinDismiss: "Verwerfen",
+    newChat: "Neuer Chat",
+    historySearchPlaceholder: "Chats suchen…",
+    historyEmpty: "Noch keine Chats. Starte oben einen.",
+    historyNoMatches: "Keine Treffer.",
+    historyJustNow: "gerade eben",
+    historyMinutesAgo: "vor {n} Min.",
+    historyHoursAgo: "vor {n} Std.",
+    historyClearAll: "Gesamten Verlauf löschen",
+    historyClearConfirm: "Gesamten Chat-Verlauf löschen?",
+    historyForgetOne: "Diesen Chat vergessen",
+    historyGroupToday: "Heute",
+    historyGroupYesterday: "Gestern",
+    historyGroupLastWeek: "Letzte 7 Tage",
+    historyGroupOlder: "Älter",
+    historyLiveBadge: "live",
+    cryptoHandshakeTitle: "Schlüsselaustausch…",
+    cryptoHandshakeBody: "Wir richten Ende-zu-Ende-Verschlüsselung zwischen dir und deinem Partner ein. Der Server kann diese Unterhaltung nicht lesen.",
+    cryptoHandshakeStatus: "Schlüsselaustausch…",
+    encryptedBadge: "Verschlüsselt",
+    roomKeyMissingTitle: "Dem Einladungslink fehlt der Verschlüsselungsschlüssel.",
+    roomKeyMissingBody: "Öffne den ursprünglichen Einladungslink mit dem #key-Fragment oder diesen Raum im Browser, in dem er erstellt wurde.",
+    roomFullTitle: "Raum ist voll",
+    roomFullBody: "Dieser private Raum hat bereits zwei Teilnehmer. Bitte den Host um einen neuen Link.",
+    roomAccessErrorTitle: "Raum kann nicht geöffnet werden",
+    roomAccessErrorBody: "Der Raum wurde geschlossen oder diese Einladung ist nicht mehr gültig.",
+  },
+
+  ja: {
+    appName: "Chatterbox",
+    tagline: "テキストだけのルーレットチャット",
+    heroTitle1: "知らない人と話そう。",
+    heroTitle2: "または友達を誘って。",
+    heroBody:
+      "共有可能なリンクでプライベートルームを作成、またはルーレットに参加して世界中のランダムな人とマッチング。アカウント不要、名前とチャットウィンドウだけ。",
+    strangerTitle: "知らない人ルーレット",
+    strangerBody:
+      "ランダムな相手とマッチングします。いつでもスキップできます。",
+    strangerCta: "チャットを開始 →",
+    roomTitle: "プライベートルーム",
+    roomBody:
+      "ルームを作成して友達とリンクを共有し、直接チャット。ランダムなマッチングなし。",
+    createRoom: "新しいルームを作成",
+    creatingRoom: "作成中…",
+    joinRoomLink: "招待コードがありますか？参加 →",
+    footerNote:
+      "優しくしましょう。アカウント不要、セッション外の履歴なし。",
+    anonymous: "匿名チャット",
+    youAre: "あなたは",
+    backHome: "← ホームへ戻る",
+
+    searchingTag: "知らない人ルーレット",
+    searchingTitle: "相手を探しています…",
+    searchingBody: "お待ちください。他の参加者がいればすぐにマッチングします。",
+    searchingStatus: "キューを検索中…",
+
+    chatTitleDefault: "知らない人とのチャット",
+    chatTitleWith: "{name}と会話中",
+    chatSubtitle: "匿名の1対1チャット",
+    statusConnected: "接続済み",
+    statusPartnerLeft: "相手が退出しました",
+    statusWaiting: "ゲストを待機中",
+    serviceUnavailable: "サービス利用不可",
+    partnerLabel: "知らない人",
+    partnerLeftMsg: "{label} が切断しました。",
+    inputPlaceholder: "何か優しいことを…",
+    inputPlaceholderConnected: "メッセージを入力…",
+    inputPlaceholderWaiting: "誰かが参加するのを待っています…",
+    sendBtn: "送信",
+    sendingBtn: "…",
+    leaveBtn: "退出",
+    nextBtn: "次の相手",
+    copyLink: "招待リンクをコピー",
+    copiedLink: "コピーしました!",
+    inviteCodeLabel: "招待コード: {code}",
+    emptyIce: "挨拶して話を始めましょう。",
+    emptyWaiting: "相手を待っています…",
+    sendFailed: "送信に失敗しました。接続を確認してください。",
+    beRespectful: "丁寧に。Enterで送信。{name}",
+
+    roomClosedTag: "ルーム終了",
+    roomClosedTitle: "このチャットは終了しました。",
+    roomClosedBody:
+      "ホストがルームを閉じました。新しいルームを作成して続けてください。",
+    backHomeBtn: "ホームへ戻る",
+    closeRoom: "ルームを閉じる",
+
+    joinTitle: "プライベートルームに参加",
+    joinBody: "友達が送った招待コードまたは完全なURLを貼り付けてください。",
+    joinPlaceholder: "https://…/room/abc123  または  abc123",
+    joinSubmit: "ルームに参加",
+    joinError:
+      "完全な招待URLまたはホストから教えてもらったコードを貼り付けてください。",
+
+    confirmLeaveTitle: "このチャットを退出しますか?",
+    confirmLeaveBody:
+      "会話から切断されます。元に戻すことはできません。",
+    confirmLeaveConfirm: "退出",
+    confirmLeaveCancel: "とどまる",
+
+    confirmNextTitle: "新しい相手を探しますか?",
+    confirmNextBody:
+      "現在のチャットは終了し、新しい相手とマッチングされます。",
+    confirmNextConfirm: "次の相手",
+    confirmNextCancel: "とどまる",
+
+    confirmCloseRoomTitle: "このルームを閉じますか?",
+    confirmCloseRoomBody:
+      "あなたとゲストのチャットを終了します。元に戻せません。",
+    confirmCloseRoomConfirm: "ルームを閉じる",
+    confirmCloseRoomCancel: "開いたまま",
+
+    loading: "読み込み中…",
+    languageLabel: "言語",
+
+    localChatTitle: "ローカルタブチャット",
+    localChatBody: "このページを2つのタブで開く(または同じデバイスの友人とリンクを共有する)とチャットできます。メッセージはブラウザ内に留まり、サーバーには送信されません。",
+    localChatCta: "ローカルチャットを始める →",
+    localChatJoinPlaceholder: "ルームキーを選択または貼り付け",
+    localChatJoinSubmit: "ルームを開く",
+    localChatNewId: "新しいキーを生成",
+    localChatLeave: "退出",
+    localChatClearHistory: "履歴をクリア",
+    localChatConfirmClearTitle: "すべてのローカルメッセージを削除しますか?",
+    localChatConfirmClearBody: "このブラウザからこのルームキーのメッセージ履歴を完全に削除します。",
+    localChatConfirmClearConfirm: "クリア",
+    localChatConfirmClearCancel: "キャンセル",
+    localChatTabCount: "{n} タブ",
+    localChatPresenceOnly: "ローカルのみ",
+    localChatEmpty: "このルームを別のタブで開いてチャットを始めましょう。",
+    localChatRoomFull: "このルームは満員です(最大8タブ)。",
+    history: "履歴",
+
+    rejoinTitle: "中断したところから続ける",
+    rejoinBody: "進行中の会話があります。再参加して続けるか、破棄して新しく始めましょう。",
+    rejoinStranger: "知らない人とのチャット",
+    rejoinRoom: "プライベートルーム",
+    rejoinCta: "再参加",
+    rejoinDismiss: "破棄",
+    newChat: "新しいチャット",
+    historySearchPlaceholder: "チャットを検索…",
+    historyEmpty: "チャットはまだありません。上で始めましょう。",
+    historyNoMatches: "一致なし。",
+    historyJustNow: "たった今",
+    historyMinutesAgo: "{n}分前",
+    historyHoursAgo: "{n}時間前",
+    historyClearAll: "履歴をすべて削除",
+    historyClearConfirm: "チャットの履歴をすべて削除しますか?",
+    historyForgetOne: "このチャットを削除",
+    historyGroupToday: "今日",
+    historyGroupYesterday: "昨日",
+    historyGroupLastWeek: "過去7日間",
+    historyGroupOlder: "過去",
+    historyLiveBadge: "ライブ",
+    cryptoHandshakeTitle: "鍵を交換中…",
+    cryptoHandshakeBody: "あなたと相手の間でエンドツーエンド暗号化を確立中です。サーバー側はこの会話を読み取れません。",
+    cryptoHandshakeStatus: "鍵を交換中…",
+    encryptedBadge: "暗号化済み",
+    roomKeyMissingTitle: "招待リンクに暗号化キーがありません。",
+    roomKeyMissingBody: "#key フラグメントを含む元の招待リンクを開くか、このルームを作成したブラウザで開いてください。",
+    roomFullTitle: "ルームは満員です",
+    roomFullBody: "このプライベートルームには既に2人の参加者がいます。ホストに新しいリンクを求めてください。",
+    roomAccessErrorTitle: "このルームを開けません",
+    roomAccessErrorBody: "ルームが閉じられたか、この招待は無効です。",
+  },
+
+  sw: {
+    appName: "Chatterbox",
+    tagline: "Mazungumzo ya maandishi kwa nasibu",
+    heroTitle1: "Zungumza na mgeni.",
+    heroTitle2: "Au alika rafiki.",
+    heroBody:
+      "Tengeneza chumba binafsi chenye kiungo kinachoweza kushirikiwa, au jiunge na roulette na upangiwe na mtu wa nasibu kutoka popote. Hakuna akaunti, jina tu na dirisha la mazungumzo.",
+    strangerTitle: "Joker ya wageni",
+    strangerBody:
+      "Tutakupanga na mtu wa nasibu. Ruka wakati wowote.",
+    strangerCta: "Anza kuzungumza →",
+    roomTitle: "Chumba binafsi",
+    roomBody:
+      "Tengeneza chumba, shiriki kiungo na rafiki, na zungumza moja kwa moja. Hakuna kanga za nasibu.",
+    createRoom: "Tengeneza chumba kipya",
+    creatingRoom: "Inatengenezwa…",
+    joinRoomLink: "Una msimbo wa mwaliko? Jiunge →",
+    footerNote:
+      "Kuwa na huruma. Hakuna akaunti, hakuna historia nje ya kikao hiki.",
+    anonymous: "Mazungumzo yasiyojulikana",
+    youAre: "Wewe ni",
+    backHome: "← Rudi nyumbani",
+
+    searchingTag: "Roulette ya wageni",
+    searchingTitle: "Tunatafuta mtu…",
+    searchingBody:
+      "Subiri kidogo. Tutakupanga mara mzungumzaji mwingine atakapokuja.",
+    searchingStatus: "Tunatafuta foleni…",
+
+    chatTitleDefault: "Mazungumzo na mgeni",
+    chatTitleWith: "Kuzungumza na {name}",
+    chatSubtitle: "Mazungumzo ya siri 1-kwa-1",
+    statusConnected: "Imeunganishwa",
+    statusPartnerLeft: "Mshirika amekatwa",
+    statusWaiting: "Kusubiri mgeni",
+    serviceUnavailable: "Huduma haipatikani",
+    partnerLabel: "Mgeni",
+    partnerLeftMsg: "{label} amekatwa.",
+    inputPlaceholder: "Sema kitu kizuri…",
+    inputPlaceholderConnected: "Andika ujumbe…",
+    inputPlaceholderWaiting: "Kusubiri mtu kujiunga…",
+    sendBtn: "Tuma",
+    sendingBtn: "…",
+    leaveBtn: "Ondoka",
+    nextBtn: "Mgeni mwingine",
+    copyLink: "Nakili kiungo cha mwaliko",
+    copiedLink: "Imenakiliwa!",
+    inviteCodeLabel: "Msimbo wa mwaliko: {code}",
+    emptyIce: "Sema habari kuanzisha mazungumzo.",
+    emptyWaiting: "Kusubiri mshirika…",
+    sendFailed: "Imeshindwa kutuma. Angalia muunganisho.",
+    beRespectful: "Kuwa na heshima. Bonyeza Enter kutuma. {name}",
+
+    roomClosedTag: "Chumba kimefungwa",
+    roomClosedTitle: "Mazungumzo haya yamefungwa.",
+    roomClosedBody:
+      "Mwenyeji amefunga chumba. Tengeneza kipya kuendelea.",
+    backHomeBtn: "Rudi nyumbani",
+    closeRoom: "Funga chumba",
+
+    joinTitle: "Jiunge na chumba binafsi",
+    joinBody:
+      "Bandika msimbo wa mwaliko au URL kamili aliyotuma rafiki yako.",
+    joinPlaceholder: "https://…/room/abc123  au  abc123",
+    joinSubmit: "Jiunge na chumba",
+    joinError:
+      "Bandika URL kamili ya mwaliko au msimbo uliopewa na mwenyeji.",
+
+    confirmLeaveTitle: "Ondoka kwenye mazungumzo haya?",
+    confirmLeaveBody:
+      "Utakatwa na mazungumzo haya na hii haiwezi kufutwa.",
+    confirmLeaveConfirm: "Ondoka",
+    confirmLeaveCancel: "Kaa",
+
+    confirmNextTitle: "Tafuta mgeni mpya?",
+    confirmNextBody:
+      "Mazungumzo yako ya sasa yataisha na utapangiwa mtu mpya.",
+    confirmNextConfirm: "Mgeni mwingine",
+    confirmNextCancel: "Kaa",
+
+    confirmCloseRoomTitle: "Funga chumba hiki?",
+    confirmCloseRoomBody:
+      "Hii itaisha mazungumzo yako na yale ya mgeni wako. Haiwezi kufutwa.",
+    confirmCloseRoomConfirm: "Funga chumba",
+    confirmCloseRoomCancel: "Wacha kiwe wazi",
+
+    loading: "Inapakia…",
+    languageLabel: "Lugha",
+
+    localChatTitle: "Mazungumzo ya eneo kati ya tabo",
+    localChatBody: "Fungua ukurasa huu katika tabo mbili (au shiriki kiungo na rafiki kwenye kifaa sawa) ili kuzungumza. Ujumbe unabaki kwenye kivinjari chako — hakuna kitu kinachotumwa kwa seva.",
+    localChatCta: "Anza mazungumzo ya eneo →",
+    localChatJoinPlaceholder: "Chagua au bandika ufunguo wa chumba",
+    localChatJoinSubmit: "Fungua chumba",
+    localChatNewId: "Tengeneza ufunguo mpya",
+    localChatLeave: "Ondoka",
+    localChatClearHistory: "Futa historia",
+    localChatConfirmClearTitle: "Futa ujumbe wote wa eneo?",
+    localChatConfirmClearBody: "Hii itaondoa historia ya ujumbe ya ufunguo huu kwenye kivinjari hiki kabisa.",
+    localChatConfirmClearConfirm: "Futa",
+    localChatConfirmClearCancel: "Ghairi",
+    localChatTabCount: "Tabo {n}",
+    localChatPresenceOnly: "Eneo tu",
+    localChatEmpty: "Fungua chumba hiki katika tabo nyingine ili uanze kuzungumza.",
+    localChatRoomFull: "Chumba hiki kimejaa (tabo 8 upeo).",
+    history: "Historia",
+
+    rejoinTitle: "Endelea ulipokoma",
+    rejoinBody: "Una mazungumzo yanayoendelea. Jiunge tena kuendelea, au puuza kuanza upya.",
+    rejoinStranger: "Mazungumzo na mgeni",
+    rejoinRoom: "Chumba binafsi",
+    rejoinCta: "Jiunge tena",
+    rejoinDismiss: "Puuza",
+    newChat: "Gumzo jipya",
+    historySearchPlaceholder: "Tafuta mazungumzo…",
+    historyEmpty: "Hakuna mazungumzo bado. Anza juu.",
+    historyNoMatches: "Hakuna matokeo.",
+    historyJustNow: "sasa hivi",
+    historyMinutesAgo: "dakika {n} iliyopita",
+    historyHoursAgo: "saa {n} iliyopita",
+    historyClearAll: "Futa historia yote",
+    historyClearConfirm: "Futa historia yote ya mazungumzo?",
+    historyForgetOne: "Sahau gumzo hili",
+    historyGroupToday: "Leo",
+    historyGroupYesterday: "Jana",
+    historyGroupLastWeek: "Siku 7 zilizopita",
+    historyGroupOlder: "Zilizopita",
+    historyLiveBadge: "moja kwa moja",
+    cryptoHandshakeTitle: "Kubadilishana funguo…",
+    cryptoHandshakeBody: "Tunaanzisha usimbaji wa mwisho-kwa-mwisho kati yako na mpenzi wako. Seva haiwezi kusoma mazungumzo haya.",
+    cryptoHandshakeStatus: "Kubadilishana funguo…",
+    encryptedBadge: "Imesimbwa",
+    roomKeyMissingTitle: "Kiungo cha mwaliko hakina ufunguo wa usimbaji.",
+    roomKeyMissingBody: "Fungua kiungo cha awali chenye sehemu ya #key, au fungua chumba hiki kwenye kivinjari kilichokitengeneza.",
+    roomFullTitle: "Chumba kimejaa",
+    roomFullBody: "Chumba hiki cha faragha tayari kina washiriki wawili. Omba kiungo kipya kwa mwenyeji.",
+    roomAccessErrorTitle: "Haiwezi kufungua chumba hiki",
+    roomAccessErrorBody: "Chumba kimefungwa au mwaliko huu si sahihi tena.",
+  },
+
+  mr: {
+    appName: "Chatterbox",
+    tagline: "मजकुर-आधारित रँडम चॅट",
+    heroTitle1: "अनोळखी व्यक्तीशी बोला.",
+    heroTitle2: "किंवा मित्राला आमंत्रित करा.",
+    heroBody:
+      "शेअर करण्यायोग्य लिंकसह खाजगी रूम तयार करा, किंवा रुलेटमध्ये सामील व्हा आणि कुठूनही एखाद्या यादृच्छिक व्यक्तीशी जोडले जा. कोणतेही खाते नाही, फक्त नाव आणि चॅट विंडो.",
+    strangerTitle: "अनोळखी रुलेट",
+    strangerBody:
+      "आम्ही तुम्हाला यादृच्छिक व्यक्तीशी जोडू. कधीही सोडू शकता.",
+    strangerCta: "चॅट सुरू करा →",
+    roomTitle: "खाजगी रूम",
+    roomBody:
+      "रूम तयार करा, मित्रासोबत लिंक शेअर करा आणि थेट चॅट करा. कोणतेही यादृच्छिक जोडी नाही.",
+    createRoom: "नवीन रूम तयार करा",
+    creatingRoom: "तयार होत आहे…",
+    joinRoomLink: "आमंत्रण कोड आहे? सामील व्हा →",
+    footerNote:
+      "दयाळू रहा. कोणतेही खाते नाही, या सत्राबाहेर कोणताही इतिहास नाही.",
+    anonymous: "अनामिक चॅट",
+    youAre: "तुम्ही आहात",
+    backHome: "← मुख्यपृष्ठावर परत",
+
+    searchingTag: "अनोळखी रुलेट",
+    searchingTitle: "कोणाला तरी शोधत आहोत…",
+    searchingBody:
+      "थोडे थांबा. दुसरा चॅटर सामील झाला की आम्ही तुम्हाला जोडू.",
+    searchingStatus: "रांगेत शोधत आहोत…",
+
+    chatTitleDefault: "अनोळखीशी चॅट",
+    chatTitleWith: "{name} सोबत चॅट",
+    chatSubtitle: "अनामिक १-विरुद्ध-१ चॅट",
+    statusConnected: "जोडलेले",
+    statusPartnerLeft: "साथी निघून गेला",
+    statusWaiting: "पाहुण्याची वाट पाहत आहे",
+    serviceUnavailable: "सेवा अनुपलब्ध",
+    partnerLabel: "अनोळखी",
+    partnerLeftMsg: "{label} डिस्कनेक्ट झाले.",
+    inputPlaceholder: "काहीतरी चांगले म्हणा…",
+    inputPlaceholderConnected: "संदेश टाइप करा…",
+    inputPlaceholderWaiting: "कोणी सामील होण्याची वाट…",
+    sendBtn: "पाठवा",
+    sendingBtn: "…",
+    leaveBtn: "सोडा",
+    nextBtn: "पुढचा अनोळखी",
+    copyLink: "आमंत्रण लिंक कॉपी करा",
+    copiedLink: "कॉपी झाले!",
+    inviteCodeLabel: "आमंत्रण कोड: {code}",
+    emptyIce: "बोलणे सुरू करण्यासाठी हॅलो म्हणा.",
+    emptyWaiting: "साथीची वाट…",
+    sendFailed: "पाठवणे अयशस्वी. कनेक्शन तपासा.",
+    beRespectful: "आदर ठेवा. पाठवण्यासाठी Enter दाबा. {name}",
+
+    roomClosedTag: "रूम बंद",
+    roomClosedTitle: "हा चॅट बंद आहे.",
+    roomClosedBody:
+      "होस्टने रूम संपवला. पुढे चालू ठेवण्यासाठी नवीन तयार करा.",
+    backHomeBtn: "मुख्यपृष्ठावर परत",
+    closeRoom: "रूम बंद करा",
+
+    joinTitle: "खाजगी रूममध्ये सामील व्हा",
+    joinBody:
+      "तुमच्या मित्राने पाठवलेला आमंत्रण कोड किंवा संपूर्ण URL पेस्ट करा.",
+    joinPlaceholder: "https://…/room/abc123  किंवा  abc123",
+    joinSubmit: "रूममध्ये सामील व्हा",
+    joinError:
+      "संपूर्ण आमंत्रण URL किंवा होस्टने दिलेला कोड पेस्ट करा.",
+
+    confirmLeaveTitle: "हा चॅट सोडायचा?",
+    confirmLeaveBody:
+      "तुम्ही या संभाषणापासून डिस्कनेक्ट व्हाल आणि हे पूर्ववत करता येणार नाही.",
+    confirmLeaveConfirm: "सोडा",
+    confirmLeaveCancel: "रहा",
+
+    confirmNextTitle: "नवीन अनोळखी शोधायचा?",
+    confirmNextBody:
+      "तुमचा सध्याचा चॅट संपेल आणि तुम्हाला नवीन व्यक्तीशी जोडले जाईल.",
+    confirmNextConfirm: "पुढचा अनोळखी",
+    confirmNextCancel: "रहा",
+
+    confirmCloseRoomTitle: "हा रूम बंद करायचा?",
+    confirmCloseRoomBody:
+      "यामुळे तुमचा आणि पाहुण्याचा चॅट संपेल. हे पूर्ववत करता येणार नाही.",
+    confirmCloseRoomConfirm: "रूम बंद करा",
+    confirmCloseRoomCancel: "उघडा ठेवा",
+
+    loading: "लोड होत आहे…",
+    languageLabel: "भाषा",
+
+    localChatTitle: "स्थानिक टॅब चॅट",
+    localChatBody: "या पृष्ठाला दोन टॅबमध्ये उघडा (किंवा समान डिव्हाइसवर मित्रासोबत लिंक शेअर करा) आणि चॅट करा. संदेश तुमच्या ब्राउझरमध्ये राहतात — सर्व्हरवर काहीही पाठवले जात नाही.",
+    localChatCta: "स्थानिक चॅट सुरू करा →",
+    localChatJoinPlaceholder: "रूम की निवडा किंवा पेस्ट करा",
+    localChatJoinSubmit: "रूम उघडा",
+    localChatNewId: "नवीन की तयार करा",
+    localChatLeave: "सोडा",
+    localChatClearHistory: "इतिहास साफ करा",
+    localChatConfirmClearTitle: "सर्व स्थानिक संदेश साफ करायचे?",
+    localChatConfirmClearBody: "हे या ब्राउझरमधून या रूम कीचा संदेश इतिहास कायमचा हटवेल.",
+    localChatConfirmClearConfirm: "साफ करा",
+    localChatConfirmClearCancel: "रद्द करा",
+    localChatTabCount: "{n} टॅब",
+    localChatPresenceOnly: "केवळ स्थानिक",
+    localChatEmpty: "चॅट सुरू करण्यासाठी हा रूम दुसऱ्या टॅबमध्ये उघडा.",
+    localChatRoomFull: "हा रूम भरलेला आहे (कमाल ८ टॅब).",
+    history: "इतिहास",
+
+    rejoinTitle: "जिथे सोडले तिथून पुढे चालू ठेवा",
+    rejoinBody: "तुमच्याकडे चालू असलेले संभाषण आहे. पुढे चालू ठेवण्यासाठी पुन्हा सामील व्हा किंवा नव्याने सुरू करण्यासाठी डिसमिस करा.",
+    rejoinStranger: "अनोळखीशी चॅट",
+    rejoinRoom: "खाजगी रूम",
+    rejoinCta: "पुन्हा सामील व्हा",
+    rejoinDismiss: "डिसमिस करा",
+    newChat: "नवीन चॅट",
+    historySearchPlaceholder: "चॅट्स शोधा…",
+    historyEmpty: "अद्याप कोणतेही चॅट नाहीत. वर सुरू करा.",
+    historyNoMatches: "जुळणारे नाहीत.",
+    historyJustNow: "आत्ताच",
+    historyMinutesAgo: "{n} मिनिटांपूर्वी",
+    historyHoursAgo: "{n} तासांपूर्वी",
+    historyClearAll: "सर्व इतिहास साफ करा",
+    historyClearConfirm: "सर्व चॅट इतिहास साफ करायचा?",
+    historyForgetOne: "हा चॅट विसरा",
+    historyGroupToday: "आज",
+    historyGroupYesterday: "काल",
+    historyGroupLastWeek: "मागील ७ दिवस",
+    historyGroupOlder: "जुने",
+    historyLiveBadge: "थेट",
+    cryptoHandshakeTitle: "की एक्सचेंज करत आहे…",
+    cryptoHandshakeBody: "तुमच्या आणि तुमच्या भागीदारामध्ये एन्ड-टू-एन्ड एन्क्रिप्शन सेट करत आहे. सर्व्हर हा संवाद वाचू शकत नाही.",
+    cryptoHandshakeStatus: "की एक्सचेंज करत आहे…",
+    encryptedBadge: "एन्क्रिप्टेड",
+    roomKeyMissingTitle: "आमंत्रण लिंक में एन्क्रिप्शन की नहीं है।",
+    roomKeyMissingBody: "मूल आमंत्रण लिंक खोलें जिसमें #key भाग है, या जिस ब्राउज़र में रूम बनाया गया था वहीं खोलें।",
+    roomFullTitle: "रूम भरलेला आहे",
+    roomFullBody: "या खाजगी रूममध्ये आधीच दोन सहभागी आहेत. होस्टकडून नवीन लिंक मागा.",
+    roomAccessErrorTitle: "हे रूम उघडता येत नाही",
+    roomAccessErrorBody: "रूम बंद झाला आहे किंवा हे आमंत्रण वैध नाही.",
+  },
+
+  te: {
+    appName: "Chatterbox",
+    tagline: "వచన ఆధారిత యాదృచ్ఛిక చాట్",
+    heroTitle1: "అపరిచితుడితో మాట్లాడండి.",
+    heroTitle2: "లేదా స్నేహితుడిని ఆహ్వానించండి.",
+    heroBody:
+      "షేర్ చేయదగిన లింక్‌తో ప్రైవేట్ రూమ్‌ను సృష్టించండి, లేదా రౌలెట్‌లో చేరి ఎక్కడి నుంచైనా యాదృచ్ఛిక వ్యక్తితో జత చేయబడండి. ఖాతాలు లేవు, పేరు మరియు చాట్ విండో మాత్రమే.",
+    strangerTitle: "అపరిచితుల రౌలెట్",
+    strangerBody:
+      "మేము మిమ్పయిి యాదృచ్ఛిక వ్యక్తితో జత చేస్తాము. ఎప్పుడైనా దాటవేయవచ్చు.",
+    strangerCta: "చాట్ ప్రారంభించండి →",
+    roomTitle: "ప్రైవేట్ రూమ్",
+    roomBody:
+      "రూమ్ సృష్టించండి, స్నేహితుడితో లింక్ షేర్ చేయండి మరియు నేరుగా చాట్ చేయండి. యాదృచ్ఛిక జతలు లేవు.",
+    createRoom: "కొత్త రూమ్ సృష్టించండి",
+    creatingRoom: "సృష్టిస్తోంది…",
+    joinRoomLink: "ఆహ్వాన కోడ్ ఉందా? చేరండి →",
+    footerNote:
+      "దయతో ఉండండి. ఖాతాలు లేవు, ఈ సెషన్ బయట చరిత్ర లేదు.",
+    anonymous: "అనామక చాట్",
+    youAre: "మీరు",
+    backHome: "← హోమ్‌కు తిరిగి",
+
+    searchingTag: "అపరిచితుల రౌలెట్",
+    searchingTitle: "ఎవరినో శోధిస్తున్నాం…",
+    searchingBody:
+      "కొంచెం వేచి ఉండండి. మరొక చాటర్ చేరిన వెంటనే మిమ్పయిి జత చేస్తాము.",
+    searchingStatus: "క్యూలో శోధిస్తోంది…",
+
+    chatTitleDefault: "అపరిచితుడితో చాట్",
+    chatTitleWith: "{name}తో చాట్",
+    chatSubtitle: "అనామక 1-ఆన్-1 చాట్",
+    statusConnected: "కనెక్ట్ అయింది",
+    statusPartnerLeft: "భాగస్వామి డిస్‌కనెక్ట్ అయ్యారు",
+    statusWaiting: "అతిథి కోసం వేచి ఉంది",
+    serviceUnavailable: "సేవ అందుబాటులో లేదు",
+    partnerLabel: "అపరిచితుడు",
+    partnerLeftMsg: "{label} డిస్‌కనెక్ట్ అయ్యారు.",
+    inputPlaceholder: "ఏదైనా మంచి మాట చెప్పండి…",
+    inputPlaceholderConnected: "సందేశం టైప్ చేయండి…",
+    inputPlaceholderWaiting: "ఎవరైనా చేరే వరకు వేచి ఉంది…",
+    sendBtn: "పంపు",
+    sendingBtn: "…",
+    leaveBtn: "వదిలేయండి",
+    nextBtn: "తదుపరి అపరిచితుడు",
+    copyLink: "ఆహ్వాన లింక్ కాపీ చేయండి",
+    copiedLink: "కాపీ అయింది!",
+    inviteCodeLabel: "ఆహ్వాన కోడ్: {code}",
+    emptyIce: "సంభాషణ ప్రారంభించడానికి హాయ్ చెప్పండి.",
+    emptyWaiting: "భాగస్వామి కోసం వేచి ఉంది…",
+    sendFailed: "పంపడం విఫలమైంది. కనెక్షన్‌ను తనిఖీ చేయండి.",
+    beRespectful: "గౌరవంగా ఉండండి. పంపడానికి Enter నొక్కండి. {name}",
+
+    roomClosedTag: "రూమ్ మూసుకుపోయింది",
+    roomClosedTitle: "ఈ చాట్ మూసుకుపోయింది.",
+    roomClosedBody:
+      "హోస్ట్ రూమ్‌ను ముగించారు. కొనసాగించడానికి కొత్తదాన్ని సృష్టించండి.",
+    backHomeBtn: "హోమ్‌కు తిరిగి",
+    closeRoom: "రూమ్ మూయండి",
+
+    joinTitle: "ప్రైవేట్ రూమ్‌లో చేరండి",
+    joinBody:
+      "మీ స్నేహితుడు పంపిన ఆహ్వాన కోడ్ లేదా పూర్తి URLని పేస్ట్ చేయండి.",
+    joinPlaceholder: "https://…/room/abc123  లేదా  abc123",
+    joinSubmit: "రూమ్‌లో చేరండి",
+    joinError:
+      "పూర్తి ఆహ్వాన URL లేదా హోస్ట్ ఇచ్చిన కోడ్‌ను పేస్ట్ చేయండి.",
+
+    confirmLeaveTitle: "ఈ చాట్‌ను వదిలేయాలా?",
+    confirmLeaveBody:
+      "మీరు ఈ సంభాషణ నుండి డిస్‌కనెక్ట్ అవుతారు మరియు దీన్ని రద్దు చేయలేరు.",
+    confirmLeaveConfirm: "వదిలేయండి",
+    confirmLeaveCancel: "ఉండండి",
+
+    confirmNextTitle: "కొత్త అపరిచితుడిని కనుగొనాలా?",
+    confirmNextBody:
+      "మీ ప్రస్తుత చాట్ ముగుస్తుంది మరియు మిమ్పయిి కొత్త వ్యక్తితో జత చేస్తారు.",
+    confirmNextConfirm: "తదుపరి అపరిచితుడు",
+    confirmNextCancel: "ఉండండి",
+
+    confirmCloseRoomTitle: "ఈ రూమ్‌ను మూయాలా?",
+    confirmCloseRoomBody:
+      "ఇది మీ మరియు మీ అతిథి చాట్‌ను ముగిస్తుంది. దీన్ని రద్దు చేయలేరు.",
+    confirmCloseRoomConfirm: "రూమ్ మూయండి",
+    confirmCloseRoomCancel: "తెరిచి ఉంచండి",
+
+    loading: "లోడ్ అవుతోంది…",
+    languageLabel: "భాష",
+
+    localChatTitle: "స్థానిక ట్యాబ్ చాట్",
+    localChatBody: "ఈ పేజీని రెండు ట్యాబ్‌లలో తెరవండి (లేదా అదే పరికరంలో స్నేహితుడితో లింక్ షేర్ చేయండి) చాట్ చేయడానికి. సందేశాలు మీ బ్రౌజర్‌లో ఉంటాయి — సర్వర్‌కు ఏదీ పంపబడదు.",
+    localChatCta: "స్థానిక చాట్ ప్రారంభించండి →",
+    localChatJoinPlaceholder: "రూమ్ కీని ఎంచుకోండి లేదా పేస్ట్ చేయండి",
+    localChatJoinSubmit: "రూమ్ తెరవండి",
+    localChatNewId: "కొత్త కీని సృష్టించండి",
+    localChatLeave: "వదిలేయండి",
+    localChatClearHistory: "చరిత్రను క్లియర్ చేయండి",
+    localChatConfirmClearTitle: "అన్ని స్థానిక సందేశాలను క్లియర్ చేయాలా?",
+    localChatConfirmClearBody: "ఇది ఈ బ్రౌజర్ నుంలో ఈ రూమ్ కీ సందేశ చరిత్రను శాశ్వతంగా తొలగిస్తుంది.",
+    localChatConfirmClearConfirm: "క్లియర్",
+    localChatConfirmClearCancel: "రద్దు",
+    localChatTabCount: "{n} ట్యాబ్(లు)",
+    localChatPresenceOnly: "స్థానికం మాత్రమే",
+    localChatEmpty: "చాట్ ప్రారంభించడానికి ఈ రూమ్‌ను మరొక ట్యాబ్‌లో తెరవండి.",
+    localChatRoomFull: "ఈ రూమ్ నిండిపోయింది (గరిష్టంగా 8 ట్యాబ్‌లు).",
+    history: "చరిత్ర",
+
+    rejoinTitle: "మీరు ఆపిన చోట నుండి కొనసాగించండి",
+    rejoinBody: "మీకు కొనసాగుతున్న సంభాషణ ఉంది. కొనసాగించడానికి తిరిగి చేరండి లేదా కొత్తదిగా ప్రారంభించడానికి తీసివేయండి.",
+    rejoinStranger: "అపరిచితుడితో చాట్",
+    rejoinRoom: "ప్రైవేట్ రూమ్",
+    rejoinCta: "తిరిగి చేరండి",
+    rejoinDismiss: "తీసివేయండి",
+    newChat: "కొత్త చాట్",
+    historySearchPlaceholder: "చాట్‌లను శోధించండి…",
+    historyEmpty: "ఇంకా చాట్‌లు లేవు. పైగా ఒకదాన్ని ప్రారంభించండి.",
+    historyNoMatches: "మ్యాచ్‌లు లేవు.",
+    historyJustNow: "ఇప్పుడే",
+    historyMinutesAgo: "{n} నిమిషాల క్రితం",
+    historyHoursAgo: "{n} గంటల క్రితం",
+    historyClearAll: "మొత్తం చరిత్రను క్లియర్ చేయండి",
+    historyClearConfirm: "మొత్తం చాట్ చరిత్రను క్లియర్ చేయాలా?",
+    historyForgetOne: "ఈ చాట్‌ను మర్చిపోండి",
+    historyGroupToday: "ఈరోజు",
+    historyGroupYesterday: "నిన్న",
+    historyGroupLastWeek: "గత 7 రోజులు",
+    historyGroupOlder: "పాతవి",
+    historyLiveBadge: "లైవ్",
+    cryptoHandshakeTitle: "కీలు మారుతున్నాయి…",
+    cryptoHandshakeBody: "మీ మరియు మీ భాగస్వామి మధ్య ఎండ్-టు-ఎండ్ ఎన్‌క్రిప్షన్ సెటప్ అవుతోంది. సర్వర్ ఈ సంభాషణను చదవలేదు.",
+    cryptoHandshakeStatus: "కీలు మారుతున్నాయి…",
+    encryptedBadge: "ఎన్‌క్రిప్ట్ చేయబడింది",
+    roomKeyMissingTitle: "ఆహ్వాన లింక్‌లో ఎన్‌క్రిప్షన్ కీ లేదు.",
+    roomKeyMissingBody: "మూల ఆహ్వాన లింక్‌లోని #key భాగంతో తెరవండి లేదా ఈ రూమ్ సృష్టించిన బ్రౌజర్‌లో తెరవండి.",
+    roomFullTitle: "రూమ్ నిండిపోయింది",
+    roomFullBody: "ఈ ప్రైవేట్ రూమ్‌లో ఇప్పటికే ఇద్దరు పాల్గొనేవారు ఉన్నారు. హోస్ట్ నుండి కొత్త లింక్ అడగండి.",
+    roomAccessErrorTitle: "ఈ రూమ్ తెరవలేము",
+    roomAccessErrorBody: "రూమ్ మూసివేయబడింది లేదా ఈ ఆహ్వానం చెల్లదు.",
+  },
+
+  tr: {
+    appName: "Chatterbox",
+    tagline: "Metin tabanlı rastgele sohbet",
+    heroTitle1: "Bir yabancıyla konuş.",
+    heroTitle2: "Veya bir arkadaşını davet et.",
+    heroBody:
+      "Paylaşılabilir bir bağlantıyla özel bir oda oluştur veya rulete katılıp herhangi bir yerden rastgele biriyle eşleş. Hesap yok, sadece bir isim ve sohbet penceresi.",
+    strangerTitle: "Yabancı ruleti",
+    strangerBody:
+      "Seni rastgele biriyle eşleştireceğiz. İstediğin zaman atlayabilirsin.",
+    strangerCta: "Sohbete başla →",
+    roomTitle: "Özel oda",
+    roomBody:
+      "Oda oluştur, bağlantıyı bir arkadaşınla paylaş ve doğrudan sohbet edin. Rastgele eşleşme yok.",
+    createRoom: "Yeni oda oluştur",
+    creatingRoom: "Oluşturuluyor…",
+    joinRoomLink: "Davet kodun var mı? Katıl →",
+    footerNote:
+      "Nazik ol. Hesap yok, bu oturum dışında geçmiş yok.",
+    anonymous: "Anonim sohbet",
+    youAre: "Sen",
+    backHome: "← Ana sayfaya dön",
+
+    searchingTag: "Yabancı ruleti",
+    searchingTitle: "Biri aranıyor…",
+    searchingBody:
+      "Sabret. Başka bir sohbetçi katılır katılmaz seni eşleştireceğiz.",
+    searchingStatus: "Sırada aranıyor…",
+
+    chatTitleDefault: "Yabancıyla sohbet",
+    chatTitleWith: "{name} ile sohbet",
+    chatSubtitle: "Anonim 1'e 1 sohbet",
+    statusConnected: "Bağlandı",
+    statusPartnerLeft: "Eş ayrıldı",
+    statusWaiting: "Misafir bekleniyor",
+    serviceUnavailable: "Hizmet kullanılamıyor",
+    partnerLabel: "Yabancı",
+    partnerLeftMsg: "{label} bağlantısı kesildi.",
+    inputPlaceholder: "Güzel bir şey söyle…",
+    inputPlaceholderConnected: "Mesaj yaz…",
+    inputPlaceholderWaiting: "Biri katılana kadar bekle…",
+    sendBtn: "Gönder",
+    sendingBtn: "…",
+    leaveBtn: "Ayrıl",
+    nextBtn: "Sonraki yabancı",
+    copyLink: "Davet bağlantısını kopyala",
+    copiedLink: "Kopyalandı!",
+    inviteCodeLabel: "Davet kodu: {code}",
+    emptyIce: "Sohbeti başlatmak için merhaba de.",
+    emptyWaiting: "Eş bekleniyor…",
+    sendFailed: "Gönderilemedi. Bağlantını kontrol et.",
+    beRespectful: "Saygılı ol. Göndermek için Enter'a bas. {name}",
+
+    roomClosedTag: "Oda kapandı",
+    roomClosedTitle: "Bu sohbet kapandı.",
+    roomClosedBody:
+      "Ev sahibi odayı sonlandırdı. Devam etmek için yeni bir tane oluştur.",
+    backHomeBtn: "Ana sayfaya dön",
+    closeRoom: "Odayı kapat",
+
+    joinTitle: "Özel odaya katıl",
+    joinBody:
+      "Arkadaşının gönderdiği davet kodunu veya tam URL'yi yapıştır.",
+    joinPlaceholder: "https://…/room/abc123  veya  abc123",
+    joinSubmit: "Odaya katıl",
+    joinError:
+      "Tam bir davet URL'si veya ev sahibinin verdiği kodu yapıştır.",
+
+    confirmLeaveTitle: "Bu sohbetten ayrıl?",
+    confirmLeaveBody:
+      "Bu konuşmadan bağlantın kesilecek ve bu geri alınamaz.",
+    confirmLeaveConfirm: "Ayrıl",
+    confirmLeaveCancel: "Kal",
+
+    confirmNextTitle: "Yeni bir yabancı bul?",
+    confirmNextBody:
+      "Mevcut sohbetin sona erecek ve seni yeni biriyle eşleştireceğiz.",
+    confirmNextConfirm: "Sonraki yabancı",
+    confirmNextCancel: "Kal",
+
+    confirmCloseRoomTitle: "Bu odayı kapat?",
+    confirmCloseRoomBody:
+      "Bu, senin ve misafirin için sohbeti sonlandırır. Geri alınamaz.",
+    confirmCloseRoomConfirm: "Odayı kapat",
+    confirmCloseRoomCancel: "Açık tut",
+
+    loading: "Yükleniyor…",
+    languageLabel: "Dil",
+
+    localChatTitle: "Yerel sekme sohbeti",
+    localChatBody: "Sohbet etmek için bu sayfayı iki sekmede açın (veya aynı cihazdaki bir arkadaşınızla bağlantıyı paylaşın). Mesajlar tarayıcınızda kalır — sunucuya hiçbir şey gönderilmez.",
+    localChatCta: "Yerel sohbet başlat →",
+    localChatJoinPlaceholder: "Bir oda anahtarı seçin veya yapıştırın",
+    localChatJoinSubmit: "Odayı aç",
+    localChatNewId: "Yeni anahtar oluştur",
+    localChatLeave: "Ayrıl",
+    localChatClearHistory: "Geçmişi temizle",
+    localChatConfirmClearTitle: "Tüm yerel mesajlar temizlensin mi?",
+    localChatConfirmClearBody: "Bu, bu tarayıcıdan bu oda anahtarının mesaj geçmişini kalıcı olarak kaldırır.",
+    localChatConfirmClearConfirm: "Temizle",
+    localChatConfirmClearCancel: "İptal",
+    localChatTabCount: "{n} sekme",
+    localChatPresenceOnly: "Yalnızca yerel",
+    localChatEmpty: "Sohbete başlamak için bu odayı başka bir sekmede açın.",
+    localChatRoomFull: "Bu oda dolu (maks. 8 sekme).",
+    history: "Geçmiş",
+
+    rejoinTitle: "Kaldığın yerden devam et",
+    rejoinBody: "Devam eden bir sohbetiniz var. Devam etmek için yeniden katılın veya baştan başlamak için yok sayın.",
+    rejoinStranger: "Yabancıyla sohbet",
+    rejoinRoom: "Özel oda",
+    rejoinCta: "Yeniden katıl",
+    rejoinDismiss: "Yok say",
+    newChat: "Yeni sohbet",
+    historySearchPlaceholder: "Sohbetlerde ara…",
+    historyEmpty: "Henüz sohbet yok. Yukarıdan başla.",
+    historyNoMatches: "Eşleşme yok.",
+    historyJustNow: "şimdi",
+    historyMinutesAgo: "{n} dk önce",
+    historyHoursAgo: "{n} sa önce",
+    historyClearAll: "Tüm geçmişi temizle",
+    historyClearConfirm: "Tüm sohbet geçmişi temizlensin mi?",
+    historyForgetOne: "Bu sohbeti unut",
+    historyGroupToday: "Bugün",
+    historyGroupYesterday: "Dün",
+    historyGroupLastWeek: "Son 7 gün",
+    historyGroupOlder: "Daha eski",
+    historyLiveBadge: "canlı",
+    cryptoHandshakeTitle: "Anahtar değişimi…",
+    cryptoHandshakeBody: "Siz ve partneriniz arasında uçtan uca şifreleme kuruluyor. Sunucu bu sohbeti okuyamaz.",
+    cryptoHandshakeStatus: "Anahtar değişimi…",
+    encryptedBadge: "Şifrelenmiş",
+    roomKeyMissingTitle: "Davet bağlantısında şifreleme anahtarı yok.",
+    roomKeyMissingBody: "#key parçasını içeren orijinal davet bağlantısını açın veya bu odayı oluşturulduğu tarayıcıda açın.",
+    roomFullTitle: "Oda dolu",
+    roomFullBody: "Bu özel odada zaten iki katılımcı var. Ev sahibinden yeni bir bağlantı isteyin.",
+    roomAccessErrorTitle: "Bu oda açılamıyor",
+    roomAccessErrorBody: "Oda kapatıldı veya bu davet artık geçerli değil.",
+  },
+
+  ta: {
+    appName: "Chatterbox",
+    tagline: "உரை அடிப்படையிலான சீரற்ற அரட்டை",
+    heroTitle1: "ஒரு அந்நியருடன் பேசுங்கள்.",
+    heroTitle2: "அல்லது நண்பரை அழைக்கவும்.",
+    heroBody:
+      "பகிரக்கூடிய இணைப்புடன் தனியார் அறையை உருவாக்கவும், அல்லது ரூலட்டில் சேர்ந்து எங்கிருந்தும் ஒரு சீரற்ற நபருடன் இணைக்கவும். கணக்குகள் இல்லை, பெயர் மற்றும் அரட்டை சாளரம் மட்டுமே.",
+    strangerTitle: "அந்நியர்கள் ரூலட்",
+    strangerBody:
+      "நாங்கள் உங்களை ஒரு சீரற்ற நபருடன் இணைப்போம். எப்போது வேண்டாலும் தவிர்க்கலாம்.",
+    strangerCta: "அரட்டையைத் தொடங்கு →",
+    roomTitle: "தனியார் அறை",
+    roomBody:
+      "அறையை உருவாக்கி, நண்பருடன் இணைப்பைப் பகிர்ந்து, நேரடியாக அரட்டையடிக்கவும். சீரற்ற இணைப்புகள் இல்லை.",
+    createRoom: "புதிய அறையை உருவாக்கு",
+    creatingRoom: "உருவாக்குகிறது…",
+    joinRoomLink: "அழைப்பு குறியீடு உள்ளதா? சேரவும் →",
+    footerNote:
+      "கனிவாக இருங்கள். கணக்குகள் இல்லை, இந்த அமர்வுக்கு வெளியே வரலாறு இல்லை.",
+    anonymous: "அனானிமச் அரட்டை",
+    youAre: "நீங்கள்",
+    backHome: "← முகப்புக்குத் திரும்ப",
+
+    searchingTag: "அந்நியர்கள் ரூலட்",
+    searchingTitle: "யாரையாவது தேடுகிறோம்…",
+    searchingBody:
+      "பொறுங்கள். மற்றொரு அரட்டையாளர் சேர்ந்தவுடன் உங்களை இணைப்போம்.",
+    searchingStatus: "வரிசையில் தேடுகிறோம்…",
+
+    chatTitleDefault: "அந்நியருடன் அரட்டை",
+    chatTitleWith: "{name} உடன் அரட்டை",
+    chatSubtitle: "அனானிமச் 1-க்கு-1 அரட்டை",
+    statusConnected: "இணைக்கப்பட்டது",
+    statusPartnerLeft: "துணை விலகினார்",
+    statusWaiting: "விருந்தினருக்காகக் காத்திருக்கிறது",
+    serviceUnavailable: "சேவை கிடைக்கவில்லை",
+    partnerLabel: "அந்நியர்",
+    partnerLeftMsg: "{label} துண்டிக்கப்பட்டார்.",
+    inputPlaceholder: "ஏதாவது நல்லது சொல்லுங்கள்…",
+    inputPlaceholderConnected: "செய்தியை உள்ளிடவும்…",
+    inputPlaceholderWaiting: "யாராவது சேரும் வரை காத்திருக்கிறது…",
+    sendBtn: "அனுப்பு",
+    sendingBtn: "…",
+    leaveBtn: "விட்டுவிடு",
+    nextBtn: "அடுத்த அந்நியர்",
+    copyLink: "அழைப்பு இணைப்பை நகலெடு",
+    copiedLink: "நகலெடுத்தது!",
+    inviteCodeLabel: "அழைப்பு குறியீடு: {code}",
+    emptyIce: "உரையாடலைத் தொடங்க வணக்கம் சொல்லுங்கள்.",
+    emptyWaiting: "துணைக்காகக் காத்திருக்கிறது…",
+    sendFailed: "அனுப்ப முடியவில்லை. இணைப்பைச் சோதிக்கவும்.",
+    beRespectful: "மரியாதையாக இருங்கள். அனுப்ப Enter அழுத்தவும். {name}",
+
+    roomClosedTag: "அறை மூடப்பட்டப்ப்டது",
+    roomClosedTitle: "இந்த அரட்டை மூடப்பட்டப்ப்டது.",
+    roomClosedBody:
+      "ஹோஸ்ட் அறையை முடித்துவிட்டார். தொடர புதியதை உருவாக்குங்கள்.",
+    backHomeBtn: "முகப்புக்குத் திரும்ப",
+    closeRoom: "அறையை மூடு",
+
+    joinTitle: "தனியார் அறையில் சேர்க்கவும்",
+    joinBody:
+      "உங்கள் நண்பர் அனுப்பிய அழைப்பு குறியீடு அல்லது முழு URL ஐ ஒட்டவும்.",
+    joinPlaceholder: "https://…/room/abc123  அல்லது  abc123",
+    joinSubmit: "அறையில் சேரவும்",
+    joinError:
+      "முழு அழைப்பு URL அல்லது ஹோஸ்ட் கொடுத்த குறியீட்டை ஒட்டவும்.",
+
+    confirmLeaveTitle: "இந்த அரட்டையை விட்டுவிடலாமா?",
+    confirmLeaveBody:
+      "இந்த உரையாடலிலிருந்து துண்டிக்கப்படுவீர்கள், இதை மாற்ற முடியாது.",
+    confirmLeaveConfirm: "விட்டுவிடு",
+    confirmLeaveCancel: "இரு",
+
+    confirmNextTitle: "புதிய அந்நியரைக் கண்டுபிடிக்கலாமா?",
+    confirmNextBody:
+      "உங்கள் தற்போதைய அரட்டை முடிவடையும், புதிய நபருடன் இணைக்கப்படுவீர்கள்.",
+    confirmNextConfirm: "அடுத்த அந்நியர்",
+    confirmNextCancel: "இரு",
+
+    confirmCloseRoomTitle: "இந்த அறையை மூடலாமா?",
+    confirmCloseRoomBody:
+      "இது உங்கள் மற்றும் உங்கள் விருந்தினரின் அரட்டையை முடிக்கும். இதை மாற்ற முடியாது.",
+    confirmCloseRoomConfirm: "அறையை மூடு",
+    confirmCloseRoomCancel: "திறந்தே வை",
+
+    loading: "ஏற்றுகிறது…",
+    languageLabel: "மொழி",
+
+    localChatTitle: "உள்ளூர் தாவல் அரட்டை",
+    localChatBody: "அரட்டையடிக்க இந்தப் பக்கத்தை இரண்டு தாவல்களில் திறக்கவும் (அல்லது அதே சாத்தியல் உள்ள நண்பருடன் இணைப்பைப் பகிரவும்). செய்திகள் உங்கள் உலாவியில் இருக்கும் — சேவைக்கு எதுவும் அனுப்பப்படாது.",
+    localChatCta: "உள்ளூர் அரட்டையைத் தொடங்கு →",
+    localChatJoinPlaceholder: "அறை விசையைத் தேர்ந்தெடு அல்லது ஒட்டு",
+    localChatJoinSubmit: "அறையைத் திற",
+    localChatNewId: "புதிய விசையை உருவாக்கு",
+    localChatLeave: "விட்டுவிடு",
+    localChatClearHistory: "வரலாற்றை அழி",
+    localChatConfirmClearTitle: "அனை உள்ளூர் செய்திகளையும் அழிக்கவா?",
+    localChatConfirmClearBody: "இது இந்த உலாவியில் இருந்து இந்த அறை விசையின் செய்தி வரலாற்றை நிரந்தரமாக அகற்றும்.",
+    localChatConfirmClearConfirm: "அழி",
+    localChatConfirmClearCancel: "ரத்து",
+    localChatTabCount: "{n} தாவல்(கள்)",
+    localChatPresenceOnly: "உள்ளூர் மட்டும்",
+    localChatEmpty: "அரட்டையைத் தொடங்க இந்த அறையை மற்றொரு தாவலில் திறக்கவும்.",
+    localChatRoomFull: "இந்த அறை நிரம்பியுள்ளது (அதிகபட்சம் 8 தாவல்கள்).",
+    history: "வரலாறு",
+
+    rejoinTitle: "நீங்கள் நிறுத்திய இடத்தில் இருந்து தொடரவேற்க",
+    rejoinBody: "உங்களிடம் ஒரு நடந்துகொண்டிருக்கும் உரையாடல் உள்ளது. தொடர மீண்டும் சேரவும் அல்லது புதிதாகத் தொடங்க நிராகரிக்கவும்.",
+    rejoinStranger: "அந்நியருடன் அரட்டை",
+    rejoinRoom: "தனியார் அறை",
+    rejoinCta: "மீண்டும் சேரவும்",
+    rejoinDismiss: "நிராகரி",
+    newChat: "புதிய அரட்டை",
+    historySearchPlaceholder: "அரட்டைகளைத் தேடு…",
+    historyEmpty: "இன்னும் அரட்டைகள் இல்லை. மேலே தொடங்குங்கள்.",
+    historyNoMatches: "பொருத்தங்கள் இல்லை.",
+    historyJustNow: "இப்போது",
+    historyMinutesAgo: "{n} நிமிடங்களுக்கு முன்",
+    historyHoursAgo: "{n} மணி நேரத்திற்கு முன்",
+    historyClearAll: "அனைத்து வரலாற்றையும் அழி",
+    historyClearConfirm: "அனைத்து அரட்டை வரலாற்றையும் அழிக்கவா?",
+    historyForgetOne: "இந்த அரட்டையை மறந்துவிடு",
+    historyGroupToday: "இன்று",
+    historyGroupYesterday: "நேற்று",
+    historyGroupLastWeek: "கடந்த 7 நாட்கள்",
+    historyGroupOlder: "பழையவை",
+    historyLiveBadge: "நேரடி",
+    cryptoHandshakeTitle: "விசைகள் பரிமாறப்படுகின்றன…",
+    cryptoHandshakeBody: "உங்களுக்கும் கூட்டாளிக்கும் இடையே முனை-க்கு-முனை மறைக்குறியாக்கம் அமைக்கப்படுகிறது. சேவைக்கு இந்த உரையாடலைப் படிக்க முடியாது.",
+    cryptoHandshakeStatus: "விசைகள் பரிமாறப்படுகின்றன…",
+    encryptedBadge: "மறைகுறியாக்கப்பட்டது",
+    roomKeyMissingTitle: "அழைப்பு இணைப்பில் குறியாக்க விசை இல்லை.",
+    roomKeyMissingBody: "#key பகுதியைக் கொண்ட அசல் அழைப்பு இணைப்பைத் திறக்கவும் அல்லது அறை உருவாக்கப்பட்ட உலாவியில் திறக்கவும்.",
+    roomFullTitle: "அறை நிரம்பியுள்ளது",
+    roomFullBody: "இந்த தனியார் அறையில் ஏற்கனவே இரண்டு பங்கேற்பாளர்கள் உள்ளனர். ஹோஸ்டிடம் புதிய இணைப்பைக் கேளுங்கள்.",
+    roomAccessErrorTitle: "இந்த அறையைத் திறக்க முடியவில்லை",
+    roomAccessErrorBody: "அறை மூடப்பட்டது அல்லது இந்த அழைப்பு செல்லுபடியாகாது.",
+  },
+
+  vi: {
+    appName: "Chatterbox",
+    tagline: "Trò chuyện ngẫu nhiên qua văn bản",
+    heroTitle1: "Nói chuyện với người lạ.",
+    heroTitle2: "Hoặc mời bạn bè.",
+    heroBody:
+      "Tạo phòng riêng với liên kết chia sẻ được, hoặc tham gia roulette và ghép đôi với người ngẫu nhiên từ bất kỳ đâu. Không cần tài khoản, chỉ cần tên và cửa sổ chat.",
+    strangerTitle: "Roulette người lạ",
+    strangerBody:
+      "Chúng tôi sẽ ghép bạn với một người ngẫu nhiên. Bỏ qua bất cứ lúc nào.",
+    strangerCta: "Bắt đầu trò chuyện →",
+    roomTitle: "Phòng riêng",
+    roomBody:
+      "Tạo phòng, chia sẻ liên kết với bạn bè và trò chuyện trực tiếp. Không ghép đôi ngẫu nhiên.",
+    createRoom: "Tạo phòng mới",
+    creatingRoom: "Đang tạo…",
+    joinRoomLink: "Có mã mời? Tham gia →",
+    footerNote:
+      "Hãy tử tế. Không tài khoản, không lịch sử ngoài phiên này.",
+    anonymous: "Trò chuyện ẩn danh",
+    youAre: "Bạn là",
+    backHome: "← Về trang chủ",
+
+    searchingTag: "Roulette người lạ",
+    searchingTitle: "Đang tìm ai đó…",
+    searchingBody:
+      "Chờ một chút. Chúng tôi sẽ ghép bạn ngay khi có người khác tham gia.",
+    searchingStatus: "Đang tìm trong hàng đợi…",
+
+    chatTitleDefault: "Trò chuyện với người lạ",
+    chatTitleWith: "Đang trò chuyện với {name}",
+    chatSubtitle: "Trò chuyện ẩn danh 1-đối-1",
+    statusConnected: "Đã kết nối",
+    statusPartnerLeft: "Đối phương đã ngắt kết nối",
+    statusWaiting: "Đang đợi khách",
+    serviceUnavailable: "Dịch vụ không khả dụng",
+    partnerLabel: "Người lạ",
+    partnerLeftMsg: "{label} đã ngắt kết nối.",
+    inputPlaceholder: "Hãy nói gì đó tốt đẹp…",
+    inputPlaceholderConnected: "Nhập tin nhắn…",
+    inputPlaceholderWaiting: "Đang đợi ai đó tham gia…",
+    sendBtn: "Gửi",
+    sendingBtn: "…",
+    leaveBtn: "Rời",
+    nextBtn: "Người lạ tiếp theo",
+    copyLink: "Sao chép liên kết mời",
+    copiedLink: "Đã sao chép!",
+    inviteCodeLabel: "Mã mời: {code}",
+    emptyIce: "Hãy chào để bắt đầu cuộc trò chuyện.",
+    emptyWaiting: "Đang đợi đối phương…",
+    sendFailed: "Gửi thất bại. Kiểm tra kết nối của bạn.",
+    beRespectful: "Hãy tôn trọng. Nhấn Enter để gửi. {name}",
+
+    roomClosedTag: "Phòng đã đóng",
+    roomClosedTitle: "Trò chuyện này đã kết thúc.",
+    roomClosedBody:
+      "Chủ phòng đã kết thúc phòng. Tạo phòng mới để tiếp tục trò chuyện.",
+    backHomeBtn: "Về trang chủ",
+    closeRoom: "Đóng phòng",
+
+    joinTitle: "Tham gia phòng riêng",
+    joinBody:
+      "Dán mã mời hoặc URL đầy đủ mà bạn của bạn đã gửi.",
+    joinPlaceholder: "https://…/room/abc123  hoặc  abc123",
+    joinSubmit: "Tham gia phòng",
+    joinError:
+      "Dán URL mời đầy đủ hoặc mã mà chủ phòng đã cung cấp.",
+
+    confirmLeaveTitle: "Rời cuộc trò chuyện này?",
+    confirmLeaveBody:
+      "Bạn sẽ bị ngắt khỏi cuộc hội thoại này và không thể hoàn tác.",
+    confirmLeaveConfirm: "Rời",
+    confirmLeaveCancel: "Ở lại",
+
+    confirmNextTitle: "Tìm người lạ mới?",
+    confirmNextBody:
+      "Cuộc trò chuyện hiện tại sẽ kết thúc và bạn sẽ được ghép với người mới.",
+    confirmNextConfirm: "Người lạ tiếp theo",
+    confirmNextCancel: "Ở lại",
+
+    confirmCloseRoomTitle: "Đóng phòng này?",
+    confirmCloseRoomBody:
+      "Điều này sẽ kết thúc cuộc trò chuyện cho cả bạn và khách của bạn. Không thể hoàn tác.",
+    confirmCloseRoomConfirm: "Đóng phòng",
+    confirmCloseRoomCancel: "Giữ mở",
+
+    loading: "Đang tải…",
+    languageLabel: "Ngôn ngữ",
+
+    localChatTitle: "Trò chuyện cục bộ giữa các tab",
+    localChatBody: "Mở trang này trong hai tab (hoặc chia sẻ liên kết với bạn bè trên cùng thiết bị) để trò chuyện. Tin nhắn ở lại trong trình duyệt — không có gì được gửi đến máy chủ.",
+    localChatCta: "Bắt đầu trò chuyện cục bộ →",
+    localChatJoinPlaceholder: "Chọn hoặc dán khóa phòng",
+    localChatJoinSubmit: "Mở phòng",
+    localChatNewId: "Tạo khóa mới",
+    localChatLeave: "Rời",
+    localChatClearHistory: "Xóa lịch sử",
+    localChatConfirmClearTitle: "Xóa tất cả tin nhắn cục bộ?",
+    localChatConfirmClearBody: "Thao tác này sẽ xóa vĩnh viễn lịch sử tin nhắn cho khóa phòng này khỏi trình duyệt này.",
+    localChatConfirmClearConfirm: "Xóa",
+    localChatConfirmClearCancel: "Hủy",
+    localChatTabCount: "{n} tab",
+    localChatPresenceOnly: "Chỉ cục bộ",
+    localChatEmpty: "Mở phòng này trong tab khác để bắt đầu trò chuyện.",
+    localChatRoomFull: "Phòng này đã đầy (tối đa 8 tab).",
+    history: "Lịch sử",
+
+    rejoinTitle: "Tiếp tục tại nơi bạn đã dừng lại",
+    rejoinBody: "Bạn có một cuộc trò chuyện đang diễn ra. Tham gia lại để tiếp tục hoặc bỏ qua để bắt đầu mới.",
+    rejoinStranger: "Trò chuyện với người lạ",
+    rejoinRoom: "Phòng riêng",
+    rejoinCta: "Tham gia lại",
+    rejoinDismiss: "Bỏ qua",
+    newChat: "Trò chuyện mới",
+    historySearchPlaceholder: "Tìm cuộc trò chuyện…",
+    historyEmpty: "Chưa có cuộc trò chuyện nào. Bắt đầu một cái ở trên.",
+    historyNoMatches: "Không có kết quả.",
+    historyJustNow: "vừa xong",
+    historyMinutesAgo: "{n} phút trước",
+    historyHoursAgo: "{n} giờ trước",
+    historyClearAll: "Xóa toàn bộ lịch sử",
+    historyClearConfirm: "Xóa toàn bộ lịch sử trò chuyện?",
+    historyForgetOne: "Quên cuộc trò chuyện này",
+    historyGroupToday: "Hôm nay",
+    historyGroupYesterday: "Hôm qua",
+    historyGroupLastWeek: "7 ngày qua",
+    historyGroupOlder: "Cũ hơn",
+    historyLiveBadge: "trực tiếp",
+    cryptoHandshakeTitle: "Đang trao đổi khóa…",
+    cryptoHandshakeBody: "Đang thiết lập mã hóa đầu cuối giữa bạn và đối phương. Máy chủ không thể đọc cuộc trò chuyện này.",
+    cryptoHandshakeStatus: "Đang trao đổi khóa…",
+    encryptedBadge: "Đã mã hóa",
+    roomKeyMissingTitle: "El enlace de invitación no tiene la clave de cifrado.",
+    roomKeyMissingBody: "Abre el enlace original con el fragmento #key o esta sala en el navegador donde se creó.",
+    roomFullTitle: "Phòng đã đầy",
+    roomFullBody: "Phòng riêng này đã có hai người tham gia. Hãy xin chủ phòng một liên kết mới.",
+    roomAccessErrorTitle: "Không thể mở phòng này",
+    roomAccessErrorBody: "Phòng đã đóng hoặc lời mời này không còn hiệu lực.",
+  },
+
+  ko: {
+    appName: "Chatterbox",
+    tagline: "텍스트 기반 랜덤 채팅",
+    heroTitle1: "낯선人と 이야기하세요.",
+    heroTitle2: "또는 친구를 초대하세요.",
+    heroBody:
+      "공유 가능한 링크로 프라이빗 룸을 만들거나, 룰렛에 참여해 어디서나 무작위 사람과 매칭됩니다. 계정 없이 이름과 채팅 창만으로.",
+    strangerTitle: "낯선人 룰렛",
+    strangerBody:
+      "무작위 사람과 매칭해 드립니다. 언제든 건너뛸 수 있습니다.",
+    strangerCta: "채팅 시작 →",
+    roomTitle: "프라이빗 룸",
+    roomBody:
+      "룸을 만들고 친구와 링크를 공유해 직접 채팅하세요. 무작위 매칭은 없습니다.",
+    createRoom: "새 룸 만들기",
+    creatingRoom: "만드는 중…",
+    joinRoomLink: "초대 코드가 있나요? 참여 →",
+    footerNote:
+      "친절하게. 계정 없음, 이 세션 외 기록 없음.",
+    anonymous: "익명 채팅",
+    youAre: "당신은",
+    backHome: "← 홈으로",
+
+    searchingTag: "낯선人 룰렛",
+    searchingTitle: "상대 찾는 중…",
+    searchingBody:
+      "잠시만요. 다른 참가자가 들어오면 바로 매칭해 드립니다.",
+    searchingStatus: "대기열 검색 중…",
+
+    chatTitleDefault: "낯선人과 채팅",
+    chatTitleWith: "{name}님과 채팅 중",
+    chatSubtitle: "익명 1대1 채팅",
+    statusConnected: "연결됨",
+    statusPartnerLeft: "상대가 연결을 끊었습니다",
+    statusWaiting: "게스트 대기 중",
+    serviceUnavailable: "서비스를 사용할 수 없음",
+    partnerLabel: "낯선人",
+    partnerLeftMsg: "{label}님이 연결을 끊었습니다.",
+    inputPlaceholder: "좋은 말을 건네보세요…",
+    inputPlaceholderConnected: "메시지를 입력하세요…",
+    inputPlaceholderWaiting: "누군가 참여할 때까지 대기…",
+    sendBtn: "보내기",
+    sendingBtn: "…",
+    leaveBtn: "나가기",
+    nextBtn: "다음 사람",
+    copyLink: "초대 링크 복사",
+    copiedLink: "복사됨!",
+    inviteCodeLabel: "초대 코드: {code}",
+    emptyIce: "인사로 대화를 시작하세요.",
+    emptyWaiting: "상대 대기 중…",
+    sendFailed: "전송 실패. 연결을 확인하세요.",
+    beRespectful: "예의 바르게. Enter로 보내기. {name}",
+
+    roomClosedTag: "룸 닫힘",
+    roomClosedTitle: "이 채팅은 종료되었습니다.",
+    roomClosedBody:
+      "호스트가 룸을 종료했습니다. 계속하려면 새로 만드세요.",
+    backHomeBtn: "홈으로",
+    closeRoom: "룸 닫기",
+
+    joinTitle: "프라이빗 룸 참여",
+    joinBody:
+      "친구가 보낸 초대 코드 또는 전체 URL을 붙여넣으세요.",
+    joinPlaceholder: "https://…/room/abc123  또는  abc123",
+    joinSubmit: "룸 참여",
+    joinError:
+      "전체 초대 URL 또는 호스트가 알려준 코드를 붙여넣으세요.",
+
+    confirmLeaveTitle: "이 채팅을 나가시겠어요?",
+    confirmLeaveBody:
+      "이 대화에서 연결이 끊어지며 되돌릴 수 없습니다.",
+    confirmLeaveConfirm: "나가기",
+    confirmLeaveCancel: "머무르기",
+
+    confirmNextTitle: "새로운 상대를 찾을까요?",
+    confirmNextBody:
+      "현재 채팅이 끝나고 새로운 사람과 매칭됩니다.",
+    confirmNextConfirm: "다음 사람",
+    confirmNextCancel: "머무르기",
+
+    confirmCloseRoomTitle: "이 룸을 닫을까요?",
+    confirmCloseRoomBody:
+      "당신과 게스트의 채팅이 모두 종료됩니다. 되돌릴 수 없습니다.",
+    confirmCloseRoomConfirm: "룸 닫기",
+    confirmCloseRoomCancel: "열린 채로 두기",
+
+    loading: "불러오는 중…",
+    languageLabel: "언어",
+
+    localChatTitle: "로컬 탭 채팅",
+    localChatBody: "두 개의 탭에서 이 페이지를 열거나(또는 같은 기기의 친구와 링크를 공유해) 채팅하세요. 메시지는 브라우저에 남아 서버로 전송되지 않습니다.",
+    localChatCta: "로컬 채팅 시작 →",
+    localChatJoinPlaceholder: "룸 키 선택 또는 붙여넣기",
+    localChatJoinSubmit: "룸 열기",
+    localChatNewId: "새 키 생성",
+    localChatLeave: "나가기",
+    localChatClearHistory: "기록 지우기",
+    localChatConfirmClearTitle: "모든 로컬 메시지를 지울까요?",
+    localChatConfirmClearBody: "이 브라우저에서 이 룸 키의 메시지 기록이 영구적으로 삭제됩니다.",
+    localChatConfirmClearConfirm: "지우기",
+    localChatConfirmClearCancel: "취소",
+    localChatTabCount: "{n}개 탭",
+    localChatPresenceOnly: "로컬 전용",
+    localChatEmpty: "이 룸을 다른 탭에서 열어 채팅을 시작하세요.",
+    localChatRoomFull: "이 룸은 가득 찼습니다(최대 8개 탭).",
+    history: "기록",
+
+    rejoinTitle: "중단한 곳에서 이어서",
+    rejoinBody: "진행 중인 대화가 있습니다. 다시 참여해 이어가거나, 무시하고 새로 시작하세요.",
+    rejoinStranger: "낯선人과 채팅",
+    rejoinRoom: "프라이빗 룸",
+    rejoinCta: "다시 참여",
+    rejoinDismiss: "무시",
+    newChat: "새 채팅",
+    historySearchPlaceholder: "채팅 검색…",
+    historyEmpty: "아직 채팅이 없습니다. 위에서 시작하세요.",
+    historyNoMatches: "일치 없음.",
+    historyJustNow: "방금",
+    historyMinutesAgo: "{n}분 전",
+    historyHoursAgo: "{n}시간 전",
+    historyClearAll: "기록 전체 삭제",
+    historyClearConfirm: "채팅 기록을 모두 삭제할까요?",
+    historyForgetOne: "이 채팅 지우기",
+    historyGroupToday: "오늘",
+    historyGroupYesterday: "어제",
+    historyGroupLastWeek: "지난 7일",
+    historyGroupOlder: "이전",
+    historyLiveBadge: "라이브",
+    cryptoHandshakeTitle: "키 교환 중…",
+    cryptoHandshakeBody: "당신과 상대 간에 종단간 암호화를 설정하고 있습니다. 서버는 이 대화를 읽을 수 없습니다.",
+    cryptoHandshakeStatus: "키 교환 중…",
+    encryptedBadge: "암호화됨",
+    roomKeyMissingTitle: "초대 링크에 암호화 키가 없습니다.",
+    roomKeyMissingBody: "#key 조각이 포함된 원래 초대 링크를 열거나 이 룸을 만든 브라우저에서 여세요.",
+    roomFullTitle: "방이 가득 찼습니다",
+    roomFullBody: "이 개인 룸에는 이미 두 명의 참가자가 있습니다. 호스트에게 새 링크를 요청하세요.",
+    roomAccessErrorTitle: "이 룸을 열 수 없습니다",
+    roomAccessErrorBody: "룸이 종료되었거나 이 초대가 더 이상 유효하지 않습니다.",
+  },
+};
+
+export type Messages = LocaleMessages;
+
+export function getLocaleMessages(code: string | null | undefined): Messages {
+  if (code && code in messages) {
+    return messages[code as LocaleCode];
+  }
+  return messages.en;
+}
+
+/** Interpolate `{name}` / `{code}` / `{label}` placeholders in a string. */
+export function format(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? "");
+}
+
+/**
+ * Try to map a BCP-47 tag like `en-US`, `zh-Hans`, or `zh-CN` to a
+ * supported locale. Falls back to English when nothing matches.
+ */
+export function pickLocaleFromNavigator(navigatorLanguage: string | undefined): LocaleCode {
+  if (!navigatorLanguage) return DEFAULT_LOCALE;
+  const lower = navigatorLanguage.toLowerCase();
+  for (const loc of SUPPORTED_LOCALES) {
+    if (lower === loc.code || lower.startsWith(`${loc.code}-`)) {
+      return loc.code;
+    }
+  }
+  if (lower.startsWith("zh")) return "zh";
+  if (lower.startsWith("ja")) return "ja";
+  if (lower.startsWith("ko")) return "ko";
+  return DEFAULT_LOCALE;
+}
