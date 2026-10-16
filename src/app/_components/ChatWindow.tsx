@@ -114,6 +114,8 @@ export function ChatWindow({
     placeholderProp ?? (disabled ? t("emptyWaiting") : t("inputPlaceholder"));
   const subtitle = subtitleProp ?? t("chatSubtitle");
 
+  const unreadRef = useRef(0);
+
   const appendMessage = useCallback((m: ChatMessage) => {
     setLocalMessages((prev) => {
       if (prev.some((p) => p.id === m.id)) return prev;
@@ -131,7 +133,28 @@ export function ChatWindow({
         Date.parse(m.createdAt) || Date.now(),
       );
     }
-  }, [apiBase, historyId, selfUserId, selfName]);
+    // #11: When the tab is not focused and a real message arrives from
+    // a different sender, bump the unread badge in the tab title.
+    if (
+      !m.systemFlag &&
+      m.senderUserId !== selfUserId &&
+      typeof document !== "undefined" &&
+      document.hidden
+    ) {
+      unreadRef.current += 1;
+      window.dispatchEvent(
+        new CustomEvent("chatterbox:unread-set", {
+          detail: { count: unreadRef.current },
+        }),
+      );
+      // #10 + #15: fire the sound + browser notification event.
+      window.dispatchEvent(
+        new CustomEvent("chatterbox:incoming-message", {
+          detail: { senderName: m.senderName, body: m.body },
+        }),
+      );
+    }
+  }, [historyId, selfUserId, selfName]);
 
   // SSE subscription. Encrypted chat parents own this subscription and
   // pass already-decrypted `externalMessages` so no ciphertext is ever
@@ -192,6 +215,21 @@ export function ChatWindow({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Reset unread counter when tab becomes visible again.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        unreadRef.current = 0;
+        window.dispatchEvent(
+          new CustomEvent("chatterbox:unread-set", { detail: { count: 0 } }),
+        );
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
 
   // Auto-focus the composer on mount and after a successful send, so the
   // user never has to click into the input to start typing. Skipped while

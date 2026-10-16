@@ -50,9 +50,10 @@ export function RoomChatClient({
   const [selfUserId, setSelfUserId] = useState<string | null>(initialUserId);
   const [selfName, setSelfName] = useState<string | null>(initialUserName);
   const [isHost, setIsHost] = useState(initialIsHost);
-  const [roomAccess, setRoomAccess] = useState<"checking" | "ready" | "full" | "error">(
+  const [roomAccess, setRoomAccess] = useState<"checking" | "ready" | "full" | "error" | "needs_passphrase">(
     initialIsHost ? "ready" : "checking",
   );
+  const [passphrase, setPassphrase] = useState("");
   const roomCrypto = useRoomCrypto(roomId, initialIsHost);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
 
@@ -139,6 +140,9 @@ export function RoomChatClient({
         if (joinRes.ok) {
           setIsHost(false);
           setRoomAccess("ready");
+        } else if (joinRes.status === 401) {
+          // Passphrase required. Show prompt.
+          setRoomAccess("needs_passphrase");
         } else if (joinRes.status === 409) {
           setRoomAccess("full");
         } else {
@@ -247,6 +251,71 @@ export function RoomChatClient({
               {t("backHomeBtn")}
             </button>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (roomAccess === "needs_passphrase") {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
+        <div className="w-full max-w-md text-center">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-amber-300">
+            🔐 {t("passphraseRequiredTitle")}
+          </p>
+          <h1 className="text-2xl font-bold">{t("passphraseRequiredTitle")}</h1>
+          <p className="mt-3 text-sm text-slate-400">
+            {t("passphraseRequiredBody")}
+          </p>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setRoomAccess("checking");
+              try {
+                const res = await fetch(`/api/rooms/${roomId}/join`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ passphrase: passphrase.trim() }),
+                });
+                if (res.ok) {
+                  setRoomAccess("ready");
+                } else if (res.status === 401) {
+                  setRoomAccess("needs_passphrase");
+                } else if (res.status === 409) {
+                  setRoomAccess("full");
+                } else {
+                  setRoomAccess("error");
+                }
+              } catch {
+                setRoomAccess("error");
+              }
+            }}
+            className="mt-6 flex flex-col gap-3"
+          >
+            <input
+              type="password"
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+              placeholder={t("passphrasePlaceholder")}
+              maxLength={128}
+              autoFocus
+              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={!passphrase.trim()}
+              className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t("passphraseSubmit")}
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="mt-4 text-xs text-slate-500 hover:text-slate-300"
+          >
+            {t("backHomeBtn")}
+          </button>
         </div>
       </main>
     );

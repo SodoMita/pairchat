@@ -47,6 +47,8 @@ export const rooms = pgTable(
       .notNull()
       .defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true }),
+    /** SHA-256 hash of the optional passphrase. NULL means no passphrase. */
+    passphraseHash: varchar("passphrase_hash", { length: 64 }),
   },
   (t) => [index("rooms_invite_code_idx").on(t.inviteCode)],
 );

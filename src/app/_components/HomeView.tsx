@@ -7,6 +7,7 @@ import { LanguagePicker } from "./LanguagePicker";
 import { CreateRoomButton } from "./CreateRoomButton";
 import { ServiceStatus } from "./ServiceStatus";
 import { ChatHistory } from "./ChatHistory";
+import { QueueStats } from "./QueueStats";
 
 export function HomeView() {
   const { t } = useI18n();
@@ -58,6 +59,9 @@ export function HomeView() {
         <section className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center sm:px-10">
           <div className="mb-3 flex justify-center">
             <ServiceStatus />
+          </div>
+          <div className="mb-5">
+            <QueueStats />
           </div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300">
             {t("tagline")}

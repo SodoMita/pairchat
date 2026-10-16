@@ -143,6 +143,10 @@ export type MessageKey =
   | "roomFullBody"
   | "roomAccessErrorTitle"
   | "roomAccessErrorBody"
+  | "passphraseRequiredTitle"
+  | "passphraseRequiredBody"
+  | "passphrasePlaceholder"
+  | "passphraseSubmit"
   | "rejoinTitle"
   | "rejoinBody"
   | "rejoinStranger"
@@ -293,6 +297,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "This private room already has two participants. Ask the host for a new invite link.",
     roomAccessErrorTitle: "Cannot open this room",
     roomAccessErrorBody: "The room was closed or this invite is no longer valid.",
+    passphraseRequiredTitle: "Passphrase required",
+    passphraseRequiredBody: "This room is protected by a passphrase. Ask the host for it and enter it below.",
+    passphrasePlaceholder: "Enter the passphrase…",
+    passphraseSubmit: "Join with passphrase",
   },
 
   zh: {
@@ -423,6 +431,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "此私人房间已有两位参与者。请向房主索取新的邀请链接。",
     roomAccessErrorTitle: "无法打开此房间",
     roomAccessErrorBody: "房间已关闭或此邀请不再有效。",
+    passphraseRequiredTitle: "需要密码",
+    passphraseRequiredBody: "此房间受密码保护。请向房主索取密码并输入。",
+    passphrasePlaceholder: "输入密码…",
+    passphraseSubmit: "用密码加入",
   },
 
   hi: {
@@ -562,6 +574,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "इस निजी रूम में पहले से दो प्रतिभागी हैं। होस्ट से नया आमंत्रण लिंक मांगें।",
     roomAccessErrorTitle: "यह रूम नहीं खोल सकते",
     roomAccessErrorBody: "रूम बंद हो गया है या यह आमंत्रण अब मान्य नहीं है।",
+    passphraseRequiredTitle: "पासफ्रेज़ आवश्यक",
+    passphraseRequiredBody: "यह रूम पासफ्रेज़ से सुरक्षित है। होस्ट से यह मांगें और नीचे दर्ज करें।",
+    passphrasePlaceholder: "पासफ्रेज़ दर्ज करें…",
+    passphraseSubmit: "पासफ्रेज़ से शामिल हों",
   },
 
   es: {
@@ -699,6 +715,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Esta sala privada ya tiene dos participantes. Pide al anfitrión un nuevo enlace.",
     roomAccessErrorTitle: "No se puede abrir esta sala",
     roomAccessErrorBody: "La sala se cerró o esta invitación ya no es válida.",
+    passphraseRequiredTitle: "Contraseña requerida",
+    passphraseRequiredBody: "Esta sala está protegida por una contraseña. Pídesela al anfitrión e ingrésala abajo.",
+    passphrasePlaceholder: "Introduce la contraseña…",
+    passphraseSubmit: "Unirse con contraseña",
   },
 
   fr: {
@@ -838,6 +858,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Ce salon privé compte déjà deux participants. Demandez un nouveau lien à l'hôte.",
     roomAccessErrorTitle: "Impossible d'ouvrir ce salon",
     roomAccessErrorBody: "Le salon est fermé ou cette invitation n'est plus valide.",
+    passphraseRequiredTitle: "Phrase secrète requise",
+    passphraseRequiredBody: "Ce salon est protégé par une phrase secrète. Demandez-la à l'hôte et saisissez-la ci-dessous.",
+    passphrasePlaceholder: "Entrez la phrase secrète…",
+    passphraseSubmit: "Rejoindre avec la phrase",
   },
 
   ar: {
@@ -968,6 +992,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "تحتوي هذه الغرفة الخاصة بالفعل على مشاركين. اطلب رابط دعوة جديدًا من المضيف.",
     roomAccessErrorTitle: "لا يمكن فتح هذه الغرفة",
     roomAccessErrorBody: "تم إغلاق الغرفة أو أن هذه الدعوة لم تعد صالحة.",
+    passphraseRequiredTitle: "مطلوب كلمة مرور",
+    passphraseRequiredBody: "هذه الغرفة محمية بكلمة مرور. اطلبها من المضيف وأدخلها أدناه.",
+    passphrasePlaceholder: "أدخل كلمة المرور…",
+    passphraseSubmit: "انضم بكلمة المرور",
   },
 
   bn: {
@@ -1106,6 +1134,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "এই ব্যক্তিগত রুমে ইতিমধ্যে দুজন অংশগ্রহণকারী আছেন। হোস্টের কাছে নতুন লিঙ্ক চান।",
     roomAccessErrorTitle: "এই রুম খোলা যাচ্ছে না",
     roomAccessErrorBody: "রুম বন্ধ হয়েছে বা এই আমন্ত্রণ আর বৈধ নয়।",
+    passphraseRequiredTitle: "পাসফ্রেজ প্রয়োজন",
+    passphraseRequiredBody: "এই রুমটি পাসফ্রেজ দ্বারা সুরক্ষিত। হোস্টের কাছ থেকে এটি নিন এবং নিচে লিখুন।",
+    passphrasePlaceholder: "পাসফ্রেজ লিখুন…",
+    passphraseSubmit: "পাসফ্রেজ দিয়ে যোগ দিন",
   },
 
   pt: {
@@ -1246,6 +1278,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Esta sala privada já tem dois participantes. Peça um novo link ao anfitrião.",
     roomAccessErrorTitle: "Não é possível abrir esta sala",
     roomAccessErrorBody: "A sala foi encerrada ou este convite não é mais válido.",
+    passphraseRequiredTitle: "Senha necessária",
+    passphraseRequiredBody: "Esta sala é protegida por uma senha. Peça ao anfitrião e digite-a abaixo.",
+    passphrasePlaceholder: "Digite a senha…",
+    passphraseSubmit: "Entrar com senha",
   },
 
   ru: {
@@ -1386,6 +1422,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "В этой приватной комнате уже два участника. Попросите у хоста новую ссылку.",
     roomAccessErrorTitle: "Не удалось открыть комнату",
     roomAccessErrorBody: "Комната закрыта или приглашение больше недействительно.",
+    passphraseRequiredTitle: "Требуется пароль",
+    passphraseRequiredBody: "Эта комната защищена паролем. Спросите его у хоста и введите ниже.",
+    passphrasePlaceholder: "Введите пароль…",
+    passphraseSubmit: "Войти с паролем",
   },
 
   ur: {
@@ -1523,6 +1563,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "اس نجی روم میں پہلے سے دو شرکاء ہیں۔ میزبان سے نیا لنک مانگیں۔",
     roomAccessErrorTitle: "یہ روم نہیں کھل سکتا",
     roomAccessErrorBody: "روم بند ہو چکا ہے یا یہ دعوت اب درست نہیں۔",
+    passphraseRequiredTitle: "پاس فریز ضروری",
+    passphraseRequiredBody: "یہ روم پاس فریز سے محفوظ ہے۔ میزبان سے یہ مانگیں اور نیچے درج کریں۔",
+    passphrasePlaceholder: "پاس فریز درج کریں…",
+    passphraseSubmit: "پاس فریز سے شامل ہوں",
   },
 
   id: {
@@ -1663,6 +1707,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Ruangan pribadi ini sudah memiliki dua peserta. Minta tautan baru kepada tuan rumah.",
     roomAccessErrorTitle: "Tidak dapat membuka ruangan ini",
     roomAccessErrorBody: "Ruangan ditutup atau undangan ini tidak lagi berlaku.",
+    passphraseRequiredTitle: "Passphrase diperlukan",
+    passphraseRequiredBody: "Ruangan ini dilindungi passphrase. Minta ke tuan rumah dan masukkan di bawah.",
+    passphrasePlaceholder: "Masukkan passphrase…",
+    passphraseSubmit: "Gabung dengan passphrase",
   },
 
   de: {
@@ -1803,6 +1851,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Dieser private Raum hat bereits zwei Teilnehmer. Bitte den Host um einen neuen Link.",
     roomAccessErrorTitle: "Raum kann nicht geöffnet werden",
     roomAccessErrorBody: "Der Raum wurde geschlossen oder diese Einladung ist nicht mehr gültig.",
+    passphraseRequiredTitle: "Passphrase erforderlich",
+    passphraseRequiredBody: "Dieser Raum ist durch ein Passwort geschützt. Bitte den Gastgeber danach und gib es unten ein.",
+    passphrasePlaceholder: "Passwort eingeben…",
+    passphraseSubmit: "Mit Passwort beitreten",
   },
 
   ja: {
@@ -1941,6 +1993,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "このプライベートルームには既に2人の参加者がいます。ホストに新しいリンクを求めてください。",
     roomAccessErrorTitle: "このルームを開けません",
     roomAccessErrorBody: "ルームが閉じられたか、この招待は無効です。",
+    passphraseRequiredTitle: "パスフレーズが必要です",
+    passphraseRequiredBody: "このルームはパスフレーズで保護されています。ホストに確認して以下に入力してください。",
+    passphrasePlaceholder: "パスフレーズを入力…",
+    passphraseSubmit: "パスフレーズで参加",
   },
 
   sw: {
@@ -2081,6 +2137,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Chumba hiki cha faragha tayari kina washiriki wawili. Omba kiungo kipya kwa mwenyeji.",
     roomAccessErrorTitle: "Haiwezi kufungua chumba hiki",
     roomAccessErrorBody: "Chumba kimefungwa au mwaliko huu si sahihi tena.",
+    passphraseRequiredTitle: "Nenosha neneno linalindwa",
+    passphraseRequiredBody: "Chumba hiki kinalindwa na neneno. Mwombe mwenyeji na uweke hapa chini.",
+    passphrasePlaceholder: "Weka neneno…",
+    passphraseSubmit: "Jiunge na neneno",
   },
 
   mr: {
@@ -2221,6 +2281,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "या खाजगी रूममध्ये आधीच दोन सहभागी आहेत. होस्टकडून नवीन लिंक मागा.",
     roomAccessErrorTitle: "हे रूम उघडता येत नाही",
     roomAccessErrorBody: "रूम बंद झाला आहे किंवा हे आमंत्रण वैध नाही.",
+    passphraseRequiredTitle: "पासवर्ड आवश्यक",
+    passphraseRequiredBody: "हा रूम पासवर्डने सुरक्षित आहे. होस्टकडून मागा आणि खाली टाइप करा.",
+    passphrasePlaceholder: "पासवर्ड टाइप करा…",
+    passphraseSubmit: "पासवर्डने सामील व्हा",
   },
 
   te: {
@@ -2361,6 +2425,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "ఈ ప్రైవేట్ రూమ్‌లో ఇప్పటికే ఇద్దరు పాల్గొనేవారు ఉన్నారు. హోస్ట్ నుండి కొత్త లింక్ అడగండి.",
     roomAccessErrorTitle: "ఈ రూమ్ తెరవలేము",
     roomAccessErrorBody: "రూమ్ మూసివేయబడింది లేదా ఈ ఆహ్వానం చెల్లదు.",
+    passphraseRequiredTitle: "పాస్‌ఫ్రేజ్ అవసరం",
+    passphraseRequiredBody: "ఈ రూమ్ పాస్‌ఫ్రేజ్‌తో రక్షించబడింది. హోస్ట్‌ని అడిగి క్రింద నమోదు చేయండి.",
+    passphrasePlaceholder: "పాస్‌ఫ్రేజ్ నమోదు చేయండి…",
+    passphraseSubmit: "పాస్‌ఫ్రేజ్‌తో చేరండి",
   },
 
   tr: {
@@ -2501,6 +2569,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Bu özel odada zaten iki katılımcı var. Ev sahibinden yeni bir bağlantı isteyin.",
     roomAccessErrorTitle: "Bu oda açılamıyor",
     roomAccessErrorBody: "Oda kapatıldı veya bu davet artık geçerli değil.",
+    passphraseRequiredTitle: "Parola gerekli",
+    passphraseRequiredBody: "Bu oda bir parola ile korunuyor. Ev sahibinden isteyin ve aşağıya girin.",
+    passphrasePlaceholder: "Parolayı girin…",
+    passphraseSubmit: "Parola ile katıl",
   },
 
   ta: {
@@ -2641,6 +2713,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "இந்த தனியார் அறையில் ஏற்கனவே இரண்டு பங்கேற்பாளர்கள் உள்ளனர். ஹோஸ்டிடம் புதிய இணைப்பைக் கேளுங்கள்.",
     roomAccessErrorTitle: "இந்த அறையைத் திறக்க முடியவில்லை",
     roomAccessErrorBody: "அறை மூடப்பட்டது அல்லது இந்த அழைப்பு செல்லுபடியாகாது.",
+    passphraseRequiredTitle: "கடவுச்சொல் தேவை",
+    passphraseRequiredBody: "இந்த அறை கடவுச்சொல்லால் பாதுகாக்கப்படுகிறது. ஹோஸ்டிடம் கேட்டு கீழே உள்ளிடவும்.",
+    passphrasePlaceholder: "கடவுச்சொல்லை உள்ளிடு…",
+    passphraseSubmit: "கடவுச்சொல்லுடன் சேர்",
   },
 
   vi: {
@@ -2781,6 +2857,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "Phòng riêng này đã có hai người tham gia. Hãy xin chủ phòng một liên kết mới.",
     roomAccessErrorTitle: "Không thể mở phòng này",
     roomAccessErrorBody: "Phòng đã đóng hoặc lời mời này không còn hiệu lực.",
+    passphraseRequiredTitle: "Cần mật khẩu",
+    passphraseRequiredBody: "Phòng này được bảo vệ bằng mật khẩu. Hãy xin từ chủ phòng và nhập bên dưới.",
+    passphrasePlaceholder: "Nhập mật khẩu…",
+    passphraseSubmit: "Tham gia bằng mật khẩu",
   },
 
   ko: {
@@ -2921,6 +3001,10 @@ const messages: Record<LocaleCode, LocaleMessages> = {
     roomFullBody: "이 개인 룸에는 이미 두 명의 참가자가 있습니다. 호스트에게 새 링크를 요청하세요.",
     roomAccessErrorTitle: "이 룸을 열 수 없습니다",
     roomAccessErrorBody: "룸이 종료되었거나 이 초대가 더 이상 유효하지 않습니다.",
+    passphraseRequiredTitle: "비밀번호 필요",
+    passphraseRequiredBody: "이 룸은 비밀번호로 보호되어 있습니다. 호스트에게 요청하고 아래에 입력하세요.",
+    passphrasePlaceholder: "비밀번호 입력…",
+    passphraseSubmit: "비밀번호로 참여",
   },
 };
 

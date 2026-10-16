@@ -8,6 +8,8 @@ export function CreateRoomButton() {
   const router = useRouter();
   const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
+  const [showPassphrase, setShowPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
   const [pending, startTransition] = useTransition();
 
   return (
@@ -18,7 +20,13 @@ export function CreateRoomButton() {
           setError(null);
           startTransition(async () => {
             try {
-              const res = await fetch("/api/rooms", { method: "POST" });
+              const body: Record<string, unknown> = {};
+              if (passphrase.trim()) body.passphrase = passphrase.trim();
+              const res = await fetch("/api/rooms", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              });
               if (!res.ok) throw new Error("Failed to create room");
               const data = (await res.json()) as { room: { id: string } };
               router.push(`/room/${data.room.id}`);
@@ -32,6 +40,23 @@ export function CreateRoomButton() {
       >
         {pending ? t("creatingRoom") : t("createRoom")}
       </button>
+      <button
+        type="button"
+        onClick={() => setShowPassphrase((v) => !v)}
+        className="text-xs text-slate-400 hover:text-slate-200"
+      >
+        {showPassphrase ? "Hide passphrase" : "Add passphrase (optional)"}
+      </button>
+      {showPassphrase && (
+        <input
+          type="password"
+          value={passphrase}
+          onChange={(e) => setPassphrase(e.target.value)}
+          placeholder="Enter a passphrase"
+          maxLength={128}
+          className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-fuchsia-400 focus:outline-none"
+        />
+      )}
       {error && <span className="text-xs text-rose-300">{error}</span>}
     </div>
   );

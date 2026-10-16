@@ -25,7 +25,10 @@ export async function GET(_req: NextRequest, ctx: RouteParams) {
   const rows = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
   const room = rows[0];
   if (!room) return Response.json({ error: "Not found" }, { status: 404 });
-  if (room.hostUserId !== user.id && room.joinedUserId !== user.id) {
+  if (
+    room.hostUserId !== user.id &&
+    (!room.joinedUserId || room.joinedUserId !== user.id)
+  ) {
     return Response.json({ error: "Not a participant" }, { status: 403 });
   }
   return Response.json({
@@ -33,6 +36,7 @@ export async function GET(_req: NextRequest, ctx: RouteParams) {
       id: room.id,
       inviteCode: room.inviteCode,
       closed: !!room.closedAt,
+      hasPassphrase: !!room.passphraseHash,
     },
   });
 }

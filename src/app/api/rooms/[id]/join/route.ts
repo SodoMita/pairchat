@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { rooms } from "@/db/schema";
@@ -25,7 +26,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  *   403 → you are the host joining your own room
  *   409 → room is full (already has a guest)
  */
-export async function POST(_req: NextRequest, ctx: RouteParams) {
+export async function POST(req: NextRequest, ctx: RouteParams) {
   const { id } = await ctx.params;
   if (!UUID_RE.test(id)) {
     return Response.json({ error: "Not found" }, { status: 404 });
@@ -39,6 +40,17 @@ export async function POST(_req: NextRequest, ctx: RouteParams) {
       { error: "Rate limited" },
       { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } },
     );
+  }
+
+  // Parse optional passphrase from request body.
+  let providedPassphrase: string | null = null;
+  try {
+    const body = (await req.json()) as { passphrase?: unknown };
+    if (typeof body.passphrase === "string" && body.passphrase.trim()) {
+      providedPassphrase = body.passphrase.trim();
+    }
+  } catch {
+    /* no body — fine */
   }
 
   const result = await db.transaction(async (tx) => {
@@ -57,6 +69,16 @@ export async function POST(_req: NextRequest, ctx: RouteParams) {
 
     if (room.hostUserId === user.id) {
       return { kind: "self" as const };
+    }
+
+    // Check passphrase if one is set on the room.
+    if (room.passphraseHash) {
+      const providedHash = providedPassphrase
+        ? createHash("sha256").update(providedPassphrase).digest("hex")
+        : null;
+      if (providedHash !== room.passphraseHash) {
+        return { kind: "wrong_passphrase" as const };
+      }
     }
 
     if (room.joinedUserId && room.joinedUserId !== user.id) {
@@ -88,6 +110,9 @@ export async function POST(_req: NextRequest, ctx: RouteParams) {
   }
   if (result.kind === "self") {
     return Response.json({ error: "You are the host" }, { status: 403 });
+  }
+  if (result.kind === "wrong_passphrase") {
+    return Response.json({ error: "Incorrect passphrase" }, { status: 401 });
   }
   if (result.kind === "full") {
     return Response.json({ error: "Room is full" }, { status: 409 });

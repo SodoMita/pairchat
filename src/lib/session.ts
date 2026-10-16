@@ -155,7 +155,6 @@ export async function getOrCreateUser(): Promise<User> {
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
-    secure: process.env.NODE_ENV === "production",
   });
   jar.set(SESSION_NAME_COOKIE, created.displayName, {
     httpOnly: false,

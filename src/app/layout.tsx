@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { I18nProvider } from "./_components/I18nProvider";
+import { NotificationCount } from "./_components/NotificationCount";
+import { NotificationSound } from "./_components/NotificationSound";
 import {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
@@ -30,7 +32,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang={locale}>
       <body className="bg-slate-950 text-slate-100 antialiased">
-        <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+        <I18nProvider initialLocale={locale}>
+          <NotificationCount />
+          <NotificationSound />
+          {children}
+        </I18nProvider>
       </body>
     </html>
   );
