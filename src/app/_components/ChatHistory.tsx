@@ -130,6 +130,7 @@ export function ChatHistory({ activeId }: Props) {
           </button>
         </div>
       )}
+      <NotificationSettings />
     </aside>
   );
 }
@@ -249,6 +250,59 @@ function groupByRecency(items: RememberedRoom[]): Group[] {
     out.push({ label: "Previous 7 days", items: buckets.lastWeek });
   if (buckets.older.length) out.push({ label: "Older", items: buckets.older });
   return out;
+}
+
+function NotificationSettings() {
+  const { t } = useI18n();
+  const [permission, setPermission] = useState<NotificationPermission | null>(null);
+
+  useEffect(() => {
+    if (typeof Notification === "undefined") return;
+    setPermission(Notification.permission);
+    // Re-check after any permission change (from the app or browser UI).
+    const onFocus = () => setPermission(Notification.permission);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  if (typeof window === "undefined") return null;
+  // Show the prompt only after the user has interacted with the app
+  // (the permission API requires a user gesture).
+  const granted = permission === "granted";
+  const denied = permission === "denied";
+
+  return (
+    <div className="border-t border-slate-800 px-3 py-2">
+      <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {t("settingsTitle")}
+      </p>
+      <button
+        type="button"
+        disabled={granted || denied}
+        onClick={async () => {
+          if (typeof Notification === "undefined") return;
+          const res = await Notification.requestPermission();
+          setPermission(res as NotificationPermission);
+        }}
+        className={`mt-1 w-full rounded-lg px-3 py-1.5 text-left text-xs transition ${
+          granted
+            ? "bg-emerald-500/15 text-emerald-300"
+            : denied
+              ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+              : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-200"
+        }`}
+      >
+        {granted
+          ? `🔔 ${t("notificationsGranted")}`
+          : denied
+            ? `🔕 ${t("notificationsDenied")}`
+            : `🔔 ${t("notificationsRequest")}`}
+      </button>
+      <p className="mt-1 px-1 text-[10px] text-slate-500">
+        {t("notificationsHint")}
+      </p>
+    </div>
+  );
 }
 
 type TT = (k: import("@/lib/i18n/messages").MessageKey, vars?: Record<string, string>) => string;

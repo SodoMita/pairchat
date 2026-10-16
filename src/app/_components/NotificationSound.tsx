@@ -19,12 +19,14 @@ import { useCallback, useEffect, useRef } from "react";
 
 export function NotificationSound() {
   const lastPlayRef = useRef(0);
+  // Track throttling for browser notifications separately (longer gap).
+  const lastNotificationRef = useRef(0);
 
   // Play a soft two-tone chime via WebAudio.
   const playChime = useCallback(() => {
-    // Throttle to max once per 3 seconds.
+    // Throttle to max once per 10 seconds — chime floods are spammy.
     const now = Date.now();
-    if (now - lastPlayRef.current < 3000) return;
+    if (now - lastPlayRef.current < 10000) return;
     lastPlayRef.current = now;
 
     try {
@@ -59,9 +61,17 @@ export function NotificationSound() {
   }, []);
 
   // Show a browser notification (if permission granted).
+  // Throttled to once per 20 seconds — notifications are more
+  // attention-demanding than chimes.
   const showNotification = useCallback((title: string, body: string) => {
-    if (typeof Notification === "undefined" || Notification.permission !== "granted")
+    if (
+      typeof Notification === "undefined" ||
+      Notification.permission !== "granted"
+    )
       return;
+    const now = Date.now();
+    if (now - lastNotificationRef.current < 20_000) return;
+    lastNotificationRef.current = now;
     try {
       const n = new Notification(title, {
         body,
@@ -99,20 +109,6 @@ export function NotificationSound() {
     return () =>
       window.removeEventListener("chatterbox:incoming-message", onMessage);
   }, [playChime, showNotification]);
-
-  // Ask for notification permission on first interaction.
-  useEffect(() => {
-    const onClick = () => {
-      if (
-        typeof Notification !== "undefined" &&
-        Notification.permission === "default"
-      ) {
-        Notification.requestPermission();
-      }
-    };
-    document.addEventListener("click", onClick, { once: true });
-    return () => document.removeEventListener("click", onClick);
-  }, []);
 
   return null;
 }
