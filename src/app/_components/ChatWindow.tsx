@@ -457,6 +457,10 @@ export function ChatWindow({
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label={t("chatTitleDefault")}
       >
         <div className="mx-auto flex max-w-2xl flex-col gap-3">
           {messages.length === 0 && (
@@ -517,7 +521,11 @@ export function ChatWindow({
             void send();
           }}
         >
+          <label htmlFor="chat-input" className="sr-only">
+            {t("inputPlaceholder")}
+          </label>
           <input
+            id="chat-input"
             ref={inputRef}
             type="text"
             value={draft}
@@ -526,11 +534,13 @@ export function ChatWindow({
             placeholder={placeholder}
             disabled={disabled || sending}
             maxLength={2000}
+            aria-label={t("inputPlaceholder")}
             className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={disabled || sending || !draft.trim()}
+            aria-label={t("sendBtn")}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sending ? t("sendingBtn") : t("sendBtn")}
