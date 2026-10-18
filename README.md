@@ -207,4 +207,17 @@ For issues, questions, or feedback:
 
 ---
 
+## E2B Deployment
+
+Deploy this app instantly on E2B (Elastic Cloud):
+
+[![Deploy on E2B](https://img.shields.io/badge/Deploy%20on%20E2B-4a4a4a?style=flat-square&logo=e2b)](https://e2b.dev)
+
+**Live Preview**: https://3000-i43srskn8ezzrl51oaggx.e2b.app
+
+Or deploy with one click:
+- [Deploy to E2B](https://e2b.dev/deploy?repo=https://github.com/SodoMita/pairchat)
+
+---
+
 **Made for small moments of genuine connection.**
