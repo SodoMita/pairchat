@@ -1,566 +1,118 @@
 "use client";
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { useI18n } from "./I18nProvider";
-import { ConfirmDialog, type ConfirmDescriptor } from "./ConfirmDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { LanguagePicker } from "./LanguagePicker";
 import { updatePreview } from "@/app/local/_lib/touchPreview";
+import type { DisplayMessage } from "@/lib/protocol";
 
-type ChatMessage = {
-  id: string;
-  scope: string;
-  senderUserId: string;
-  senderName: string;
-  body: string;
-  createdAt: string;
-  systemFlag: boolean;
+type Props = {
+  initialMessages: DisplayMessage[]; externalMessages?: DisplayMessage[]; manageSSE?: boolean;
+  selfUserId: string; selfName: string; apiBase: string; historyId?: string;
+  partnerName?: string | null; partnerLabel?: string; title: string; subtitle?: string; shareUrl?: string;
+  status?: { kind: "ok" | "warn" | "danger"; text: string }; onEnded?: () => void; headerRight?: React.ReactNode;
+  onNext?: () => void | Promise<void>; onCloseRoom?: () => void | Promise<void>; onLeave?: () => void | Promise<void>;
+  customLeaveLabel?: string; disabled?: boolean; placeholder?: string; customSend: (plaintext: string) => Promise<void>; encrypted?: boolean;
 };
-
-type ChatWindowProps = {
-  initialMessages: ChatMessage[];
-  /** Parent-owned decrypted history, when the chat is end-to-end encrypted. */
-  externalMessages?: ChatMessage[];
-  /** Disable the built-in plaintext SSE listener when a parent decrypts SSE. */
-  manageSSE?: boolean;
-  selfUserId: string;
-  selfName: string;
-  apiBase: string;
-  /** Stable id used to update the history sidebar (e.g. "stranger:<id>" or "room:<id>"). */
-  historyId?: string;
-  partnerName?: string | null;
-  partnerLabel?: string;
-  title: string;
-  subtitle?: string;
-  shareUrl?: string;
-  status?: { kind: "ok" | "warn" | "danger"; text: string };
-  onEnded?: () => void;
-  headerRight?: React.ReactNode;
-  /**
-   * Called when the user requests to skip to the next stranger. The
-   * parent should perform the actual matchmaking teardown.
-   */
-  onNext?: () => void;
-  /**
-   * Called when the user clicks "Close room". The parent should perform
-   * the room close API call.
-   */
-  onCloseRoom?: () => void;
-  /**
-   * Called when the user clicks "Leave". The parent should navigate away
-   * and clean up. The button is rendered internally so the dialog flows
-   * are consistent.
-   */
-  onLeave?: () => void;
-  /** Render a custom "leave" button (e.g., for guest view). */
-  customLeaveLabel?: string;
-  disabled?: boolean;
-  placeholder?: string;
-  /**
-   * If provided, called with plaintext instead of issuing the default
-   * plaintext POST. The parent is responsible for encrypting before
-   * talking to the server. Used for end-to-end encrypted chats.
-   */
-  customSend?: (plaintext: string) => Promise<void>;
-  /** Show an "Encrypted" badge in the header. */
-  encrypted?: boolean;
-};
-
-type PendingConfirm =
-  | { kind: "leave" }
-  | { kind: "next" }
-  | { kind: "closeRoom" };
-
-export function ChatWindow({
-  initialMessages,
-  externalMessages,
-  manageSSE = true,
-  selfUserId,
-  selfName,
-  apiBase,
-  historyId,
-  partnerName,
-  partnerLabel: partnerLabelProp,
-  title,
-  subtitle: subtitleProp,
-  shareUrl,
-  status,
-  onEnded,
-  headerRight,
-  onNext,
-  onCloseRoom,
-  onLeave,
-  customLeaveLabel,
-  disabled,
-  placeholder: placeholderProp,
-  customSend,
-  encrypted,
-}: ChatWindowProps) {
-  const { t } = useI18n();
-  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(initialMessages);
-  const messages = externalMessages ?? localMessages;
+export function ChatWindow(props: Props) {
+  const { t, locale } = useI18n();
+  const messages = props.externalMessages ?? props.initialMessages;
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const lastTimestampRef = useRef<string | null>(
-    initialMessages[initialMessages.length - 1]?.createdAt ?? null,
-  );
-
-  // Localized labels
-  const partnerLabel = partnerLabelProp ?? t("partnerLabel");
-  const placeholder =
-    placeholderProp ?? (disabled ? t("emptyWaiting") : t("inputPlaceholder"));
-  const subtitle = subtitleProp ?? t("chatSubtitle");
-
-  const unreadRef = useRef(0);
-
-  const appendMessage = useCallback((m: ChatMessage) => {
-    setLocalMessages((prev) => {
-      if (prev.some((p) => p.id === m.id)) return prev;
-      return [...prev, m];
-    });
-    if (m.createdAt) lastTimestampRef.current = m.createdAt;
-    // Push the new message into the chat-history preview bucket so the
-    // sidebar shows the most-recent message per room. Skip system
-    // messages (partner left etc.) — those shouldn't dominate the row.
-    if (!m.systemFlag && historyId) {
-      updatePreview(
-        historyId,
-        m.body,
-        m.senderUserId === selfUserId ? selfName : (m.senderName || ""),
-        Date.parse(m.createdAt) || Date.now(),
-      );
+  const [confirm, setConfirm] = useState<"leave" | "next" | "close" | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const scroll = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
+  const seen = useRef(new Set<string>());
+  const mountedAt = useRef(Date.now());
+  const unread = useRef(0);
+  const id = useId();
+  useEffect(() => {
+    const last = messages.filter(m => !m.systemFlag).at(-1);
+    if (last && props.historyId) updatePreview(props.historyId, last.body, last.senderName, Date.parse(last.createdAt));
+    for (const m of messages) {
+      if (seen.current.has(m.id)) continue;
+      seen.current.add(m.id);
+      if (!m.systemFlag && m.senderUserId !== props.selfUserId && Date.parse(m.createdAt) >= mountedAt.current && document.hidden) {
+        unread.current++;
+        window.dispatchEvent(new CustomEvent("chatterbox:unread-set", { detail: { count: unread.current } }));
+        // Notification events deliberately omit names, message text and keys.
+        window.dispatchEvent(new CustomEvent("chatterbox:incoming-message", { detail: { id: m.id } }));
+      }
     }
-    // #11: When the tab is not focused and a real message arrives from
-    // a different sender, bump the unread badge in the tab title.
-    if (
-      !m.systemFlag &&
-      m.senderUserId !== selfUserId &&
-      typeof document !== "undefined" &&
-      document.hidden
-    ) {
-      unreadRef.current += 1;
-      window.dispatchEvent(
-        new CustomEvent("chatterbox:unread-set", {
-          detail: { count: unreadRef.current },
-        }),
-      );
-      // #10 + #15: fire the sound + browser notification event.
-      window.dispatchEvent(
-        new CustomEvent("chatterbox:incoming-message", {
-          detail: { senderName: m.senderName, body: m.body },
-        }),
-      );
-    }
-  }, [historyId, selfUserId, selfName]);
-
-  // SSE subscription. Encrypted chat parents own this subscription and
-  // pass already-decrypted `externalMessages` so no ciphertext is ever
-  // rendered as plaintext or parsed by this component.
+    if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
+  }, [messages, props.historyId, props.selfUserId]);
   useEffect(() => {
-    if (!manageSSE) return;
-    let es: EventSource | null = null;
-
-    const since = lastTimestampRef.current;
-    const url = since
-      ? `${apiBase}${apiBase.includes("?") ? "&" : "?"}since=${encodeURIComponent(since)}`
-      : apiBase;
-
-    es = new EventSource(url);
-
-    es.addEventListener("message", (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as {
-          type: string;
-          message?: ChatMessage;
-        };
-        if (payload.type === "message" && payload.message) {
-          appendMessage(payload.message);
-        }
-      } catch {
-        // ignore
-      }
-    });
-
-    es.addEventListener("partner", (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as { type: string };
-        if (payload.type === "partner_left") {
-          appendMessage({
-            id: `sys-partner-${Date.now()}`,
-            scope: apiBase,
-            senderUserId: "system",
-            senderName: "System",
-            body: t("partnerLeftMsg", { label: partnerLabel }),
-            createdAt: new Date().toISOString(),
-            systemFlag: true,
-          });
-          onEnded?.();
-        }
-      } catch {
-        // ignore
-      }
-    });
-
-    return () => {
-      if (es) es.close();
-    };
-  }, [apiBase, appendMessage, manageSSE, onEnded, partnerLabel, t]);
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
-
-  // Reset unread counter when tab becomes visible again.
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (!document.hidden) {
-        unreadRef.current = 0;
-        window.dispatchEvent(
-          new CustomEvent("chatterbox:unread-set", { detail: { count: 0 } }),
-        );
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+    const clear = () => { if (!document.hidden) { unread.current = 0; window.dispatchEvent(new CustomEvent("chatterbox:unread-set", { detail: { count: 0 } })); } };
+    window.addEventListener("focus", clear); document.addEventListener("visibilitychange", clear);
+    return () => { window.removeEventListener("focus", clear); document.removeEventListener("visibilitychange", clear); };
   }, []);
-
-  // Auto-focus the composer on mount and after a successful send, so the
-  // user never has to click into the input to start typing. Skipped while
-  // a confirm dialog is open or the chat is disabled.
+  useEffect(() => { if (!props.disabled && !confirm) input.current?.focus(); }, [props.disabled, confirm]);
   useEffect(() => {
-    if (disabled) return;
-    inputRef.current?.focus();
-  }, [disabled, selfUserId]);
-
-  // Capture printable keys when nothing is focused so the first typed
-  // character lands in the composer without a click. We bail out on
-  // modifier shortcuts and when a non-text input already owns focus.
-  useEffect(() => {
-    function isEditable(el: Element | null): boolean {
-      if (!el) return false;
-      const tag = el.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-      if ((el as HTMLElement).isContentEditable) return true;
-      return false;
-    }
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (disabled) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key.length !== 1) return; // skip arrows, Enter, etc.
-      if (e.key === " " || /[\p{L}\p{N}\p{P}\p{S}]/u.test(e.key) === false) return;
-      if (isEditable(document.activeElement)) return;
-      // Don't hijack while a confirm dialog is open.
-      const dlg = document.querySelector('[role="dialog"][aria-modal="true"]');
-      if (dlg) return;
-      e.preventDefault();
-      inputRef.current?.focus();
-      setDraft((prev) => prev + e.key);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [disabled]);
-
-  const send = useCallback(async () => {
+    const handler = (e: KeyboardEvent) => {
+      if (props.disabled || confirm || e.defaultPrevented || e.isComposing || e.ctrlKey || e.altKey || e.metaKey || e.key.length !== 1) return;
+      const target = document.activeElement as HTMLElement | null;
+      if (target?.closest("input,textarea,select,button,a,[contenteditable],[role='listbox'],[role='dialog'],summary") || document.querySelector("dialog[open], [aria-modal='true']")) return;
+      e.preventDefault(); input.current?.focus(); setDraft(prev => (prev + e.key).slice(0, 2000));
+    };
+    window.addEventListener("keydown", handler); return () => window.removeEventListener("keydown", handler);
+  }, [props.disabled, confirm]);
+  const send = async () => {
     const text = draft.trim();
-    if (!text || disabled) return;
-    setSending(true);
+    if (!text || props.disabled || sendingRef.current) return;
+    sendingRef.current = true; setSending(true); setFailure(null);
     try {
-      if (customSend) {
-        // The parent owns encryption. We don't add to the local message
-        // list here because the parent appends optimistically.
-        await customSend(text);
-        setDraft("");
-        inputRef.current?.focus();
-        return;
-      }
-      const res = await fetch(apiBase, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) throw new Error("Send failed");
-      const data = (await res.json()) as { message: ChatMessage };
-      appendMessage(data.message);
-      setDraft("");
-      inputRef.current?.focus();
-    } catch {
-      appendMessage({
-        id: `sys-err-${Date.now()}`,
-        scope: apiBase,
-        senderUserId: "system",
-        senderName: "System",
-        body: t("sendFailed"),
-        createdAt: new Date().toISOString(),
-        systemFlag: true,
-      });
-    } finally {
-      setSending(false);
-    }
-  }, [apiBase, appendMessage, customSend, disabled, draft, t]);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void send();
-    }
+      await props.customSend(text);
+      setDraft(current => current.trim() === text ? "" : current);
+    } catch (error) { setFailure(error instanceof Error ? error.message : t("sendFailed")); }
+    finally { sendingRef.current = false; setSending(false); requestAnimationFrame(() => { if (!document.querySelector("dialog[open], [aria-modal='true']")) input.current?.focus(); }); }
   };
-
-  const statusColor = useMemo(() => {
-    if (!status) return "";
-    switch (status.kind) {
-      case "ok":
-        return "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30";
-      case "warn":
-        return "bg-amber-500/15 text-amber-300 ring-amber-500/30";
-      case "danger":
-        return "bg-rose-500/15 text-rose-300 ring-rose-500/30";
-    }
-  }, [status]);
-
-  // Confirmation flows — clicking the button stages the confirm; the
-  // confirm dialog calls the actual action via `onConfirm`.
-  const confirmDescriptor: ConfirmDescriptor | null = pendingConfirm
-    ? pendingConfirm.kind === "leave"
-      ? {
-          title: t("confirmLeaveTitle"),
-          description: t("confirmLeaveBody"),
-          confirmLabel: t("confirmLeaveConfirm"),
-          cancelLabel: t("confirmLeaveCancel"),
-          destructive: true,
-        }
-      : pendingConfirm.kind === "next"
-      ? {
-          title: t("confirmNextTitle"),
-          description: t("confirmNextBody"),
-          confirmLabel: t("confirmNextConfirm"),
-          cancelLabel: t("confirmNextCancel"),
-          destructive: false,
-        }
-      : {
-          title: t("confirmCloseRoomTitle"),
-          description: t("confirmCloseRoomBody"),
-          confirmLabel: t("confirmCloseRoomConfirm"),
-          cancelLabel: t("confirmCloseRoomCancel"),
-          destructive: true,
-        }
-    : null;
-
-  const runPending = useCallback(() => {
-    const p = pendingConfirm;
-    setPendingConfirm(null);
-    if (!p) return;
-    if (p.kind === "leave") onLeave?.();
-    if (p.kind === "next") onNext?.();
-    if (p.kind === "closeRoom") onCloseRoom?.();
-  }, [pendingConfirm, onLeave, onNext, onCloseRoom]);
-
-  return (
-    <div className="flex h-screen flex-col bg-slate-950 text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900/60 px-4 py-3 backdrop-blur sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <a
-            href="/"
-            className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-lg font-bold"
-          >
-            ✦
-          </a>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-base font-semibold">{title}</h1>
-              {encrypted && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
-                  title={t("encryptedBadge")}
-                >
-                  <span aria-hidden>🔒</span>
-                  {t("encryptedBadge")}
-                </span>
-              )}
-              {status && (
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${statusColor}`}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                  {status.text}
-                </span>
-              )}
-            </div>
-            <p className="truncate text-xs text-slate-400">
-              {subtitle}
-              {partnerName && (
-                <span className="ms-2 text-slate-500">· {partnerName}</span>
-              )}
-            </p>
+  const confirmKeys = confirm === "next"
+    ? { title: t("confirmNextTitle"), description: t("confirmNextBody"), confirmLabel: t("confirmNextConfirm"), cancelLabel: t("confirmNextCancel") }
+    : confirm === "close"
+      ? { title: t("confirmCloseRoomTitle"), description: t("confirmCloseRoomBody"), confirmLabel: t("confirmCloseRoomConfirm"), cancelLabel: t("confirmCloseRoomCancel") }
+      : { title: t("confirmLeaveTitle"), description: t("confirmLeaveBody"), confirmLabel: t("confirmLeaveConfirm"), cancelLabel: t("confirmLeaveCancel") };
+  return <div className="flex min-h-0 flex-1 flex-col bg-slate-950 text-slate-100">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/60 p-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <Link href="/" prefetch={false} aria-label={t("backHomeBtn")} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500">✦</Link>
+        <div className="min-w-0"><h1 className="truncate text-base font-semibold">{props.title}</h1><p className="break-all text-xs text-slate-400">{props.subtitle ?? t("chatSubtitle")}</p>
+          {props.status && <span className={`text-xs ${props.status.kind === "ok" ? "text-emerald-300" : "text-amber-300"}`}>● {props.status.text}</span>}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <LanguagePicker compact />
+        {props.shareUrl && <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(props.shareUrl!); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { setFailure("Clipboard unavailable. Copy the complete URL from the address bar."); } }} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2">{t(copied ? "copiedLink" : "copyLink")}</button>}
+        {props.onNext && <button type="button" onClick={() => setConfirm("next")} className="rounded-lg bg-indigo-500 px-3 py-2">{t("nextBtn")}</button>}
+        {props.onCloseRoom && <button type="button" onClick={() => setConfirm("close")} className="rounded-lg border border-rose-700 bg-rose-500/10 px-3 py-2 text-rose-200">{t("closeRoom")}</button>}
+        {props.onLeave && <button type="button" onClick={() => setConfirm("leave")} className="rounded-lg border border-slate-700 px-3 py-2">{props.customLeaveLabel ?? t("leaveBtn")}</button>}
+        {props.headerRight}
+      </div>
+    </header>
+    <div ref={scroll} role="log" aria-live="polite" aria-relevant="additions" aria-label={t("chatTitleDefault")} className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
+      <div className="mx-auto flex max-w-2xl flex-col gap-3">
+        {!messages.length && <p className="rounded-2xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">{t(props.disabled ? "emptyWaiting" : "emptyIce")}</p>}
+        {messages.map(m => m.systemFlag ? <p key={m.id} className="self-center text-xs text-slate-400">{m.body}</p> : <div key={m.id} className={`flex ${m.senderUserId === props.selfUserId ? "justify-end" : "justify-start"}`}>
+          <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${m.senderUserId === props.selfUserId ? "rounded-br-md bg-indigo-600" : "rounded-bl-md bg-slate-800"}`}>
+            {m.senderUserId !== props.selfUserId && <p className="mb-1 text-[11px] text-slate-400"><bdi>{m.senderName}</bdi></p>}
+            <div data-testid="message-body" dir="auto" className="whitespace-pre-wrap break-words">{m.body}</div>
+            <time className="mt-1 block text-[10px] opacity-60" dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Compact language picker inside the chat, so users can switch
-              mid-conversation without leaving the page. */}
-          <LanguagePicker compact />
-          {shareUrl && (
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(shareUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                } catch {
-                  // ignore
-                }
-              }}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
-            >
-              {copied ? t("copiedLink") : t("copyLink")}
-            </button>
-          )}
-          {onNext && (
-            <button
-              type="button"
-              onClick={() => setPendingConfirm({ kind: "next" })}
-              className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white shadow shadow-indigo-500/30 transition hover:bg-indigo-400"
-            >
-              {t("nextBtn")}
-            </button>
-          )}
-          {onCloseRoom && (
-            <button
-              type="button"
-              onClick={() => setPendingConfirm({ kind: "closeRoom" })}
-              className="rounded-lg border border-rose-700/60 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20"
-            >
-              {t("closeRoom")}
-            </button>
-          )}
-          {onLeave && (
-            <button
-              type="button"
-              onClick={() => setPendingConfirm({ kind: "leave" })}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700"
-            >
-              {customLeaveLabel ?? t("leaveBtn")}
-            </button>
-          )}
-          {headerRight}
-        </div>
-      </header>
-
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-6 sm:px-6"
-        role="log"
-        aria-live="polite"
-        aria-relevant="additions"
-        aria-label={t("chatTitleDefault")}
-      >
-        <div className="mx-auto flex max-w-2xl flex-col gap-3">
-          {messages.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-400">
-              {disabled ? t("emptyWaiting") : t("emptyIce")}
-            </div>
-          )}
-          {messages.map((m) => {
-            if (m.systemFlag) {
-              return (
-                <div
-                  key={m.id}
-                  className="self-center rounded-full bg-slate-800/60 px-3 py-1 text-center text-xs text-slate-400"
-                >
-                  {m.body}
-                </div>
-              );
-            }
-            const mine = m.senderUserId === selfUserId;
-            return (
-              <div
-                key={m.id}
-                className={`flex ${mine ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm sm:max-w-[70%] ${
-                    mine
-                      ? "rounded-br-md bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white"
-                      : "rounded-bl-md bg-slate-800 text-slate-100"
-                  }`}
-                >
-                  {!mine && (
-                    <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                      {m.senderName}
-                    </div>
-                  )}
-                  <div className="whitespace-pre-wrap break-words">{m.body}</div>
-                  <div
-                    className={`mt-1 text-[10px] ${mine ? "text-indigo-100/70" : "text-slate-500"}`}
-                  >
-                    {new Date(m.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        </div>)}
       </div>
-
-      <div className="border-t border-slate-800 bg-slate-900/60 px-4 py-3 backdrop-blur sm:px-6">
-        <form
-          className="mx-auto flex max-w-2xl items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-        >
-          <label htmlFor="chat-input" className="sr-only">
-            {t("inputPlaceholder")}
-          </label>
-          <input
-            id="chat-input"
-            ref={inputRef}
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={placeholder}
-            disabled={disabled || sending}
-            maxLength={2000}
-            aria-label={t("inputPlaceholder")}
-            className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={disabled || sending || !draft.trim()}
-            aria-label={t("sendBtn")}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sending ? t("sendingBtn") : t("sendBtn")}
-          </button>
-        </form>
-        <p className="mx-auto mt-1.5 max-w-2xl text-center text-[10px] text-slate-500">
-          {t("beRespectful", { name: selfName })}
-        </p>
-      </div>
-
-      <ConfirmDialog
-        open={!!confirmDescriptor}
-        title={confirmDescriptor?.title ?? ""}
-        description={confirmDescriptor?.description}
-        confirmLabel={confirmDescriptor?.confirmLabel ?? ""}
-        cancelLabel={confirmDescriptor?.cancelLabel ?? ""}
-        destructive={confirmDescriptor?.destructive}
-        onConfirm={runPending}
-        onCancel={() => setPendingConfirm(null)}
-      />
     </div>
-  );
+    <footer className="border-t border-slate-800 bg-slate-900/60 p-4">
+      {failure && <p role="alert" className="mx-auto mb-2 max-w-2xl text-sm text-rose-300">{failure}</p>}
+      <form className="mx-auto flex max-w-2xl gap-2" onSubmit={e => { e.preventDefault(); void send(); }}>
+        <label className="sr-only" htmlFor={id}>{t("inputPlaceholder")}</label>
+        <input id={id} ref={input} value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault(); }} placeholder={props.placeholder ?? t("inputPlaceholder")} maxLength={2000} disabled={props.disabled} autoComplete="off" className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm focus:border-indigo-400 focus:outline-none disabled:opacity-50" />
+        <button aria-label={t("sendBtn")} disabled={props.disabled || sending || !draft.trim()} className="rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold disabled:opacity-50">{t(sending ? "sendingBtn" : "sendBtn")}</button>
+      </form>
+      <p className="mt-2 text-center text-[10px] text-slate-500">{t("beRespectful", { name: props.selfName })}</p>
+    </footer>
+    <ConfirmDialog open={!!confirm} {...confirmKeys} destructive={confirm !== "next"} onCancel={() => setConfirm(null)} onConfirm={() => { const action = confirm === "next" ? props.onNext : confirm === "close" ? props.onCloseRoom : props.onLeave; setConfirm(null); void action?.(); }} />
+  </div>;
 }

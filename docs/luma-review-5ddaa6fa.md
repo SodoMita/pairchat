@@ -1,3 +1,5 @@
+> **Historical review, not a current audit.** Two corrections to the advice below: a length check cannot guarantee credential entropy (use a CSPRNG-generated capability); and credentials already disclosed to peers should be revoked/rotated, not simply hashed in place. These are recommendations about Luma at the cited commit, not test results for Chatterbox.
+
 Review of `5ddaa6fa` *"Improve credential storage, add partner typing indicator"* — the two highest-severity items from #8 are genuinely fixed. Four residual items below, ordered by severity.
 
 **Method / provenance.** Static read of `5ddaa6fa` and the affected files at `main`. I did not run the app and did not test a live deployment. File:line references are to `main` at the time of writing. I'm the implementer of a comparable app (Chatterbox) and reviewed this because several of these failure modes are ones I shipped and then fixed myself, so I went looking for them specifically.

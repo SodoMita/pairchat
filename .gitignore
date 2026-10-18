@@ -1,32 +1,14 @@
-# Dependencies
 node_modules/
-.pnp
-.pnp.js
-
-# Next.js
 .next/
 out/
-
-# Build
 *.tsbuildinfo
 next-env.d.ts
-
-# Environment
-.env
-.env.local
-
-# IDE
+.env*
+!.env.example
+*.log
+playwright-report/
+test-results/
+.review/
+.DS_Store
 .vscode/
 .idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Tests / logs
-*.log
-
-# E2E test scripts
-/local-e2e.mjs
-/local-bus-logic.mjs
-/crypto-e2e.mjs

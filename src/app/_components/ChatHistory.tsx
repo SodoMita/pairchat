@@ -30,8 +30,11 @@ export function ChatHistory({ activeId }: Props) {
     setItems(listRememberedRooms());
     const onUpdate = () => setItems(listRememberedRooms());
     window.addEventListener("chatterbox:history-updated", onUpdate);
-    return () =>
+    window.addEventListener("storage", onUpdate);
+    return () => {
       window.removeEventListener("chatterbox:history-updated", onUpdate);
+      window.removeEventListener("storage", onUpdate);
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -213,6 +216,7 @@ function HistoryRow({
 }
 
 function hrefFor(item: RememberedRoom): string {
+  if (item.kind !== "local" && item.active === false) return `/history/${encodeURIComponent(item.id)}`;
   if (item.kind === "local") return `/local/${encodeURIComponent(item.id)}`;
   if (item.kind === "stranger") {
     const sessionId = item.id.replace(/^stranger:/, "");
@@ -254,55 +258,35 @@ function groupByRecency(items: RememberedRoom[]): Group[] {
 
 function NotificationSettings() {
   const { t } = useI18n();
+  const [sound, setSound] = useState(false);
+  const [banners, setBanners] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | null>(null);
-
   useEffect(() => {
-    if (typeof Notification === "undefined") return;
-    setPermission(Notification.permission);
-    // Re-check after any permission change (from the app or browser UI).
-    const onFocus = () => setPermission(Notification.permission);
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    try {
+      setSound(localStorage.getItem("chatterbox.sound") === "on");
+      setBanners(localStorage.getItem("chatterbox.notifications") === "on");
+    } catch { /* storage disabled */ }
+    if (typeof Notification !== "undefined") setPermission(Notification.permission);
   }, []);
-
-  if (typeof window === "undefined") return null;
-  // Show the prompt only after the user has interacted with the app
-  // (the permission API requires a user gesture).
-  const granted = permission === "granted";
-  const denied = permission === "denied";
-
-  return (
-    <div className="border-t border-slate-800 px-3 py-2">
-      <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-        {t("settingsTitle")}
-      </p>
-      <button
-        type="button"
-        disabled={granted || denied}
-        onClick={async () => {
-          if (typeof Notification === "undefined") return;
-          const res = await Notification.requestPermission();
-          setPermission(res as NotificationPermission);
-        }}
-        className={`mt-1 w-full rounded-lg px-3 py-1.5 text-left text-xs transition ${
-          granted
-            ? "bg-emerald-500/15 text-emerald-300"
-            : denied
-              ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-              : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-200"
-        }`}
-      >
-        {granted
-          ? `🔔 ${t("notificationsGranted")}`
-          : denied
-            ? `🔕 ${t("notificationsDenied")}`
-            : `🔔 ${t("notificationsRequest")}`}
-      </button>
-      <p className="mt-1 px-1 text-[10px] text-slate-500">
-        {t("notificationsHint")}
-      </p>
-    </div>
-  );
+  return <div className="border-t border-slate-800 px-3 py-3 text-xs">
+    <p className="mb-2 text-slate-500">{t("settingsTitle")}</p>
+    <button type="button" aria-pressed={sound} onClick={() => {
+      const enabled = !sound;
+      setSound(enabled);
+      try { localStorage.setItem("chatterbox.sound", enabled ? "on" : "off"); } catch { /* optional */ }
+      if (enabled) window.dispatchEvent(new Event("chatterbox:enable-sound"));
+    }} className="mb-2 w-full rounded-lg bg-slate-800 px-3 py-2 text-start">{sound ? "🔊 Sound on" : "🔇 Sound off"}</button>
+    <button type="button" aria-pressed={banners} disabled={permission === null || permission === "denied"} onClick={async () => {
+      if (typeof Notification === "undefined") return;
+      let state = Notification.permission;
+      if (state === "default") state = await Notification.requestPermission();
+      setPermission(state);
+      const enabled = state === "granted" && !banners;
+      setBanners(enabled);
+      try { localStorage.setItem("chatterbox.notifications", enabled ? "on" : "off"); } catch { /* optional */ }
+    }} className="w-full rounded-lg bg-slate-800 px-3 py-2 text-start disabled:opacity-40">{t(permission === "denied" ? "notificationsDenied" : banners ? "notificationsGranted" : "notificationsRequest")}</button>
+    <p className="mt-2 text-[10px] text-slate-500">Notifications never include message text or encryption keys.</p>
+  </div>;
 }
 
 type TT = (k: import("@/lib/i18n/messages").MessageKey, vars?: Record<string, string>) => string;

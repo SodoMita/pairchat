@@ -1,117 +1,47 @@
 "use client";
+import { useEffect, useState } from "react";
+import { b64uDecode, b64uEncode, deriveConversationKey, safetyCode, type IdentityKeypair } from "@/lib/crypto";
+import { loadOrCreateIdentityKeypair, pinPartner } from "@/lib/client-store";
+import { validPublicKey } from "@/lib/protocol";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  b64uDecode,
-  b64uEncode,
-  loadOrCreateIdentityKeypair,
-  openStrangerMessage,
-  parseEnvelope,
-  sealStrangerMessage,
-  type IdentityKeypair,
-} from "@/lib/crypto";
-
-const PUBLISH_RETRY_MS = [0, 1500, 4000];
-
-/**
- * Per-chat X25519 identity for the stranger flow.
- *
- * - Loads (or creates) this browser's non-extractable identity keypair for
- *   (user, session) and publishes the PUBLIC half to the server, which
- *   pushes it to the partner.
- * - The partner's public key is an input (`partnerKeyB64`), delivered over
- *   the `/api/stranger/events` stream — this hook does no polling.
- */
-export function useStrangerCrypto(
-  sessionId: string | null,
-  userId: string | null,
-  partnerKeyB64: string | null,
-) {
-  const [identity, setIdentity] = useState<IdentityKeypair | null>(null);
-  const identityRef = useRef<IdentityKeypair | null>(null);
-  identityRef.current = identity;
-
+export function useStrangerCrypto(sessionId: string | null, userId: string | null, partnerKeyB64: string | null) {
+  const storageId = sessionId && userId ? `stranger:${userId}:${sessionId}` : null;
+  const [identityState, setIdentityState] = useState<{ storageId: string; identity: IdentityKeypair } | null>(null);
+  const [derived, setDerived] = useState<{ storageId: string; peer: string; key: CryptoKey; code: string } | null>(null);
+  const [failure, setFailure] = useState<{ storageId: string; message: string } | null>(null);
+  const identity = identityState?.storageId === storageId ? identityState.identity : null;
   useEffect(() => {
-    setIdentity(null);
-    if (!sessionId || !userId) return;
+    if (!storageId || !sessionId) return;
     let cancelled = false;
-    (async () => {
-      const kp = await loadOrCreateIdentityKeypair(
-        `stranger:${userId}:${sessionId}`,
-      );
-      if (cancelled) return;
-      setIdentity(kp);
-      const body = JSON.stringify({ identityPubKey: b64uEncode(kp.publicKey) });
-      // Publishing is idempotent; retry a couple of times on failure.
-      for (const delay of PUBLISH_RETRY_MS) {
-        if (delay) await new Promise((r) => setTimeout(r, delay));
-        if (cancelled) return;
-        try {
-          const res = await fetch("/api/stranger/start", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body,
-          });
-          if (res.ok) return;
-        } catch {
-          /* retry */
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, userId]);
-
-  const partnerKey = useMemo(() => {
-    if (!partnerKeyB64) return null;
-    try {
-      const raw = b64uDecode(partnerKeyB64);
-      return raw.length === 32 ? raw : null;
-    } catch {
-      return null;
-    }
-  }, [partnerKeyB64]);
-
-  const encrypt = useCallback(
-    async (plaintext: string) => {
-      const me = identityRef.current;
-      if (!me || !partnerKey) throw new Error("Crypto not ready");
-      const sealed = await sealStrangerMessage(plaintext, me.privateKey, partnerKey);
-      return {
-        envelope: JSON.stringify(sealed.envelope),
-        ephemeralPubKey: b64uEncode(sealed.ephemeralPub),
-      };
-    },
-    [partnerKey],
-  );
-
-  const decrypt = useCallback(
-    async (
-      envelopeJson: string,
-      senderStaticPub: Uint8Array,
-      senderEphemeralPubB64: string,
-    ) => {
-      const me = identityRef.current;
-      if (!me) return null;
-      const env = parseEnvelope(envelopeJson);
-      if (!env) return null;
+    setFailure(null);
+    void (async () => {
       try {
-        return await openStrangerMessage(
-          env,
-          me.privateKey,
-          senderStaticPub,
-          b64uDecode(senderEphemeralPubB64),
-        );
-      } catch {
-        return null;
-      }
-    },
-    [],
-  );
-
-  return useMemo(
-    () => ({ identity, partnerKey, partnerKeyReady: !!partnerKey, encrypt, decrypt }),
-    [identity, partnerKey, encrypt, decrypt],
-  );
+        const kp = await loadOrCreateIdentityKeypair(storageId);
+        if (cancelled) return;
+        const res = await fetch("/api/stranger/start", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, identityPubKey: b64uEncode(kp.publicKey) }) });
+        if (!res.ok) throw new Error(res.status === 409 ? "This session already has a different encryption key. Start a new chat." : "Could not publish the encryption key. Please reopen the chat.");
+        if (!cancelled) setIdentityState({ storageId, identity: kp });
+      } catch (e) { if (!cancelled) setFailure({ storageId, message: e instanceof Error ? e.message : "Encryption unavailable" }); }
+    })();
+    return () => { cancelled = true; };
+  }, [storageId, sessionId]);
+  useEffect(() => {
+    if (!identity || !storageId || !sessionId || !partnerKeyB64) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (!validPublicKey(partnerKeyB64)) throw new Error("Invalid partner key");
+        await pinPartner(storageId, partnerKeyB64);
+        const peer = b64uDecode(partnerKeyB64);
+        const scope = `stranger:${sessionId}`;
+        const key = await deriveConversationKey(identity, peer, scope);
+        const code = await safetyCode(scope, identity.publicKey, peer);
+        if (!cancelled) setDerived({ storageId, peer: partnerKeyB64, key, code });
+      } catch (e) { if (!cancelled) setFailure({ storageId, message: e instanceof Error ? e.message : "Key verification failed" }); }
+    })();
+    return () => { cancelled = true; };
+  }, [identity, storageId, sessionId, partnerKeyB64]);
+  const valid = derived?.storageId === storageId && derived?.peer === partnerKeyB64;
+  const error = failure?.storageId === storageId ? failure.message : null;
+  return { key: valid && !error ? derived!.key : null, code: valid ? derived!.code : null, error };
 }

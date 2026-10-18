@@ -1,61 +1,26 @@
-import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { rooms } from "@/db/schema";
-import { getOrCreateUser } from "@/lib/session";
-import { closeRoom, roomScope } from "@/lib/chat";
-import { publish } from "@/lib/bus";
-
+import { requireUser } from "@/lib/session";
+import { closeRoom } from "@/lib/chat";
+import { api, HttpError, readJson } from "@/lib/request-security";
+import { UUID_RE } from "@/lib/protocol";
 export const dynamic = "force-dynamic";
-type RouteParams = { params: Promise<{ id: string }> };
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function badId() {
-  return Response.json({ error: "Not found" }, { status: 404 });
-}
-
-/**
- * GET — Return room metadata (id, inviteCode, hostUserId, closed).
- */
-export async function GET(_req: NextRequest, ctx: RouteParams) {
+type Context = { params: Promise<{ id: string }> };
+export const GET = api<Context>(async (_req, ctx) => {
+  const user = await requireUser();
   const { id } = await ctx.params;
-  if (!UUID_RE.test(id)) return badId();
-  const user = await getOrCreateUser();
-  const rows = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
-  const room = rows[0];
-  if (!room) return Response.json({ error: "Not found" }, { status: 404 });
-  if (
-    room.hostUserId !== user.id &&
-    (!room.joinedUserId || room.joinedUserId !== user.id)
-  ) {
-    return Response.json({ error: "Not a participant" }, { status: 403 });
-  }
-  return Response.json({
-    room: {
-      id: room.id,
-      inviteCode: room.inviteCode,
-      closed: !!room.closedAt,
-      hasPassphrase: !!room.passphraseHash,
-    },
-  });
-}
-
-/**
- * DELETE — Close the room. Anyone in the room may close it (the host can
- * always close; the guest can leave which also closes since it's 1:1).
- */
-export async function DELETE(_req: NextRequest, ctx: RouteParams) {
+  if (!UUID_RE.test(id)) throw new HttpError(404, "Room not found");
+  const [room] = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
+  if (!room) throw new HttpError(404, "Room not found");
+  if (room.hostUserId !== user.id && room.joinedUserId !== user.id) throw new HttpError(403, "Not a participant");
+  return Response.json({ room: { id: room.id, inviteCode: room.inviteCode, closed: !!room.closedAt, hasPassphrase: !!room.passphraseHash } });
+});
+export const DELETE = api<Context>(async (req, ctx) => {
+  const user = await requireUser();
+  await readJson(req, 1024, true);
   const { id } = await ctx.params;
-  if (!UUID_RE.test(id)) return badId();
-  const user = await getOrCreateUser();
-  const rows = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
-  const room = rows[0];
-  if (!room) return Response.json({ error: "Not found" }, { status: 404 });
-  if (room.hostUserId !== user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-  await closeRoom(id);
-  publish(roomScope(id), JSON.stringify({ type: "room_closed" }));
+  if (!UUID_RE.test(id)) throw new HttpError(404, "Room not found");
+  await closeRoom(id, user.id);
   return Response.json({ ok: true });
-}
+});

@@ -1,9 +1,10 @@
+import { deleteHistory } from "@/lib/client-store";
 // Browser-side storage of "rooms I've been in recently". Used by the
 // home page to render a chat history column (à la ChatGPT / Mistral).
 //
 // We intentionally store *ids, labels, and previews* on the client only;
-// messages themselves stay in the database (server chats) or in a
-// separate localStorage bucket (local chats). The history column is
+// encrypted transcripts live only in IndexedDB in this browser. Local
+// tab conversations use localStorage. The history column is
 // purely a navigation aid — clicking an entry re-opens the chat.
 
 export type RememberedKind = "stranger" | "room" | "local";
@@ -30,6 +31,8 @@ export type RememberedRoom = {
   unread?: number;
   /** Client-only private-room key, never sent to the server. */
   key?: string;
+  /** Public local owner id, used to select browser keys for an archive. */
+  ownerId?: string;
 };
 
 const KEY = "chatterbox.local.rooms";
@@ -49,11 +52,15 @@ export function rememberRoom(entry: Omit<RememberedRoom, "ts">): void {
   try {
     const raw = window.localStorage.getItem(KEY);
     const parsed: Record<string, RememberedRoom> = safeParse(raw) ?? {};
+    const existing = parsed[entry.id];
     parsed[entry.id] = {
-      ...entry,
-      ts: Date.now(),
+      ...existing,
+      ...Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== undefined)),
+      id: entry.id, kind: entry.kind, title: entry.title,
+      ts: existing?.ts ?? Date.now(),
     };
     window.localStorage.setItem(KEY, JSON.stringify(parsed));
+    window.dispatchEvent(new CustomEvent("chatterbox:history-updated"));
   } catch {
     // ignore
   }
@@ -81,6 +88,7 @@ export function touchRoom(
       ts: patch.ts ?? existing.ts,
     };
     window.localStorage.setItem(KEY, JSON.stringify(parsed));
+    window.dispatchEvent(new CustomEvent("chatterbox:history-updated"));
   } catch {
     // ignore
   }
@@ -93,7 +101,10 @@ export function forgetRoom(id: string): void {
     const parsed = safeParse<Record<string, RememberedRoom>>(raw);
     if (!parsed) return;
     delete parsed[id];
+    void deleteHistory(id).catch(() => {});
+    window.localStorage.removeItem("chatterbox.local.msgs." + id);
     window.localStorage.setItem(KEY, JSON.stringify(parsed));
+    window.dispatchEvent(new CustomEvent("chatterbox:history-updated"));
   } catch {
     // ignore
   }
@@ -114,7 +125,12 @@ export function listRememberedRooms(): RememberedRoom[] {
 export function clearRememberedRooms(): void {
   if (typeof window === "undefined") return;
   try {
+    for (const entry of listRememberedRooms()) {
+      void deleteHistory(entry.id).catch(() => {});
+      window.localStorage.removeItem("chatterbox.local.msgs." + entry.id);
+    }
     window.localStorage.removeItem(KEY);
+    window.dispatchEvent(new CustomEvent("chatterbox:history-updated"));
     window.localStorage.removeItem(SEEN_KEY);
   } catch {
     // ignore

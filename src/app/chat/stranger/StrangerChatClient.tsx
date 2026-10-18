@@ -1,386 +1,117 @@
 "use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChatWindow } from "@/app/_components/ChatWindow";
 import { ChatShell } from "@/app/_components/ChatShell";
+import { EncryptionInfo } from "@/app/_components/EncryptionInfo";
+import { useEncryptedConversation } from "@/app/_components/useEncryptedConversation";
 import { useI18n } from "@/app/_components/I18nProvider";
-import { rememberRoom } from "@/app/local/_lib/rememberRooms";
+import { rememberRoom, touchRoom } from "@/app/local/_lib/rememberRooms";
+import { SID_RE } from "@/lib/protocol";
 import { useStrangerCrypto } from "./useStrangerCrypto";
-
-type WireMessage = {
-  id: string;
-  scope: string;
-  senderUserId: string;
-  senderName: string;
-  /** AES-GCM envelope JSON — the server never sees plaintext. */
-  body: string;
-  senderPubKey: string | null;
-  createdAt: string;
-  systemFlag: boolean;
-};
-
-type DisplayMessage = {
-  id: string;
-  scope: string;
-  senderUserId: string;
-  senderName: string;
-  /** Plaintext, decrypted in this browser. */
-  body: string;
-  createdAt: string;
-  systemFlag: boolean;
-};
-
 type Me = { id: string; displayName: string };
 type Session = { sessionId: string; partnerName: string | null };
-type PairedPayload = {
-  sessionId: string;
-  partnerName?: string | null;
-  partnerLeft?: boolean;
-  partnerKey?: string | null;
-};
 
-const BASE_BACKOFF_MS = 2_000;
-const MAX_BACKOFF_MS = 30_000;
-
-/**
- * Stranger roulette. The page is a static shell; everything dynamic
- * arrives over two connections to our own server:
- *
- *   POST /api/stranger/start   once per match: join the queue, learn who I am
- *   GET  /api/stranger/events  one SSE stream: paired / partner key / left
- *
- * plus the per-session message stream once keys are exchanged. There is no
- * polling and no `/api/me` call.
- */
 export function StrangerChatClient() {
   const router = useRouter();
   const { t } = useI18n();
-
   const [me, setMe] = useState<Me | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [partnerKeyB64, setPartnerKeyB64] = useState<string | null>(null);
+  const currentSession = useRef<string | null>(null);
+  const [partnerKey, setPartnerKey] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
-  const [messages, setMessages] = useState<DisplayMessage[]>([]);
-  const [netError, setNetError] = useState(false);
-  /** Bumped to (re)start matching: "Next stranger" and error retries. */
   const [attempt, setAttempt] = useState(0);
-  const failuresRef = useRef(0);
+  const [netError, setNetError] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const crypto = useStrangerCrypto(session?.sessionId ?? null, me?.id ?? null, partnerKey);
+  const scope = session ? `stranger:${session.sessionId}` : null;
+  const conversation = useEncryptedConversation({ scope, apiBase: session ? `/api/stranger/messages/${session.sessionId}` : null, key: crypto.key, me, ended, onControl: data => { if (data.type === "session_ended") setEnded(true); } });
 
-  const e2ee = useStrangerCrypto(
-    session?.sessionId ?? null,
-    me?.id ?? null,
-    partnerKeyB64,
-  );
-
-  // ---- Matching + event stream ------------------------------------------
   useEffect(() => {
-    let cancelled = false;
-    let events: EventSource | null = null;
-    setSession(null);
-    setPartnerKeyB64(null);
-    setEnded(false);
-    setMessages([]);
-    setNetError(false);
-
-    const applyPaired = (p: PairedPayload) => {
-      // Idempotent: the same session may be reported by the POST response,
-      // the stream's `state` event, and a `paired` event.
-      setSession((prev) =>
-        prev?.sessionId === p.sessionId
-          ? prev
-          : { sessionId: p.sessionId, partnerName: p.partnerName ?? null },
-      );
+    let stopped = false;
+    let stream: EventSource | null = null;
+    currentSession.current = null;
+    setSession(null); setPartnerKey(null); setEnded(false); setNetError(false); setSwitching(false);
+    const paired = (p: Record<string, unknown>) => {
+      if (stopped || typeof p.sessionId !== "string" || !SID_RE.test(p.sessionId)) return;
+      if (currentSession.current && currentSession.current !== p.sessionId) return; // stale/mismatched tab event
+      currentSession.current = p.sessionId;
+      setSession(previous => previous?.sessionId === p.sessionId ? previous : { sessionId: p.sessionId as string, partnerName: typeof p.partnerName === "string" ? p.partnerName : null });
       if (p.partnerLeft) setEnded(true);
-      // Keys only ever move forward: never clear one on a stale snapshot.
-      if (p.partnerKey) setPartnerKeyB64(p.partnerKey);
+      if (typeof p.partnerKey === "string") setPartnerKey(p.partnerKey);
     };
-
-    (async () => {
+    void (async () => {
       try {
-        const res = await fetch("/api/stranger/start", { method: "POST" });
-        if (!res.ok) throw new Error("start failed");
-        const data = (await res.json()) as {
-          state: "queued" | "paired";
-          me: Me;
-        } & Partial<PairedPayload>;
-        if (cancelled) return;
-        failuresRef.current = 0;
+        // Serializing browser bootstrap avoids two cold tabs issuing different
+        // cookies simultaneously. No extra identity fetch or polling.
+        const start = () => fetch("/api/stranger/start", { method: "POST" });
+        const response = navigator.locks ? await navigator.locks.request("chatterbox-entry", start) : await start();
+        if (!response.ok) throw new Error("Start failed");
+        const data = await response.json();
+        if (stopped) return;
         setMe(data.me);
-        if (data.state === "paired" && data.sessionId) {
-          applyPaired(data as PairedPayload);
-        }
-      } catch {
-        if (!cancelled) setNetError(true);
-        return;
-      }
-
-      // Opened only after /start resolved so a first-time visitor's account
-      // exists before the stream authenticates (no duplicate-user race).
-      events = new EventSource("/api/stranger/events");
-      const parse = (ev: MessageEvent) => JSON.parse(ev.data);
-      events.addEventListener("state", (ev) => {
-        const d = parse(ev as MessageEvent);
-        if (d.state === "paired") applyPaired(d);
-      });
-      events.addEventListener("paired", (ev) => applyPaired(parse(ev as MessageEvent)));
-      events.addEventListener("partner_key", (ev) => {
-        const d = parse(ev as MessageEvent);
-        if (typeof d.key === "string") setPartnerKeyB64(d.key);
-      });
-      events.addEventListener("partner_left", () => setEnded(true));
+        if (data.state === "paired") paired(data);
+        stream = new EventSource("/api/stranger/events");
+        const handle = (event: MessageEvent) => {
+          if (stopped) return;
+          try {
+            const value = JSON.parse(event.data);
+            if (event.type === "state" && value.state === "paired" || event.type === "paired") paired(value);
+            else if (value.sessionId === currentSession.current) {
+              if (event.type === "partner_key" && typeof value.key === "string") setPartnerKey(value.key);
+              if (event.type === "partner_left") setEnded(true);
+            }
+          } catch { /* malformed event */ }
+        };
+        for (const type of ["state", "paired", "partner_key", "partner_left"]) stream.addEventListener(type, handle as EventListener);
+        stream.addEventListener("fatal", () => { stream?.close(); if (!stopped) setNetError(true); });
+      } catch { if (!stopped) setNetError(true); }
     })();
-
-    return () => {
-      cancelled = true;
-      events?.close();
-    };
+    return () => { stopped = true; stream?.close(); };
   }, [attempt]);
 
-  // Retry with exponential backoff (auto-retrying at a fixed short interval
-  // against a down server would only add traffic).
   useEffect(() => {
-    if (!netError) return;
-    failuresRef.current += 1;
-    const delay = Math.min(
-      MAX_BACKOFF_MS,
-      BASE_BACKOFF_MS * 2 ** (failuresRef.current - 1),
-    );
-    const id = setTimeout(() => setAttempt((a) => a + 1), delay);
-    return () => clearTimeout(id);
-  }, [netError]);
-
-  useEffect(() => {
-    if (!session) return;
-    rememberRoom({
-      id: `stranger:${session.sessionId}`,
-      kind: "stranger",
-      title: t("chatTitleDefault"),
-      active: true,
-    });
-  }, [session, t]);
-
-  // ---- Encrypted message stream -----------------------------------------
-  const ingest = useCallback(
-    async (m: WireMessage) => {
-      if (!me || !e2ee.identity || !e2ee.partnerKey || !m.senderPubKey) return;
-      // The sender's static key is mine or my partner's; 1:1 chat.
-      const senderStatic =
-        m.senderUserId === me.id ? e2ee.identity.publicKey : e2ee.partnerKey;
-      const plain = await e2ee.decrypt(m.body, senderStatic, m.senderPubKey);
-      const display: DisplayMessage = {
-        id: m.id,
-        scope: m.scope,
-        senderUserId: m.senderUserId,
-        senderName: m.senderName,
-        body: plain ?? "[unable to decrypt]",
-        createdAt: m.createdAt,
-        systemFlag: m.systemFlag,
-      };
-      setMessages((prev) =>
-        prev.some((p) => p.id === display.id)
-          ? prev
-          : [...prev, display].sort((a, b) =>
-              a.createdAt.localeCompare(b.createdAt),
-            ),
-      );
-    },
-    [me, e2ee],
-  );
-
-  // Opened only once both keys exist, so the replayed history can never be
-  // shown as raw ciphertext.
-  useEffect(() => {
-    if (!session || !me || !e2ee.identity || !e2ee.partnerKey) return;
-    const es = new EventSource(`/api/stranger/messages/${session.sessionId}`);
-    es.addEventListener("message", (ev) => {
-      try {
-        const payload = JSON.parse((ev as MessageEvent).data) as {
-          type: string;
-          message?: WireMessage;
-        };
-        if (payload.type === "message" && payload.message) {
-          void ingest(payload.message);
-        }
-      } catch {
-        /* ignore malformed */
-      }
-    });
-    return () => es.close();
-  }, [session, me, e2ee.identity, e2ee.partnerKey, ingest]);
-
-  useEffect(() => {
-    if (!ended || !session) return;
-    const id = `sys-left-${session.sessionId}`;
-    setMessages((prev) =>
-      prev.some((p) => p.id === id)
-        ? prev
-        : [
-            ...prev,
-            {
-              id,
-              scope: `stranger:${session.sessionId}`,
-              senderUserId: "system",
-              senderName: "System",
-              body: t("partnerLeftMsg", { label: t("partnerLabel") }),
-              createdAt: new Date().toISOString(),
-              systemFlag: true,
-            },
-          ],
-    );
-  }, [ended, session, t]);
-
-  const sendEncrypted = useCallback(
-    async (plaintext: string) => {
-      if (!session || !me || !e2ee.identity || !e2ee.partnerKey) {
-        throw new Error("Crypto not ready");
-      }
-      const sealed = await e2ee.encrypt(plaintext);
-      const res = await fetch(`/api/stranger/messages/${session.sessionId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          envelope: sealed.envelope,
-          ephemeralPubKey: sealed.ephemeralPubKey,
-        }),
-      });
-      if (!res.ok) throw new Error("Send failed");
-      const data = (await res.json()) as { message: WireMessage };
-      // Show my own message immediately (I already have the plaintext);
-      // the stream's copy is de-duplicated by id.
-      setMessages((prev) =>
-        prev.some((p) => p.id === data.message.id)
-          ? prev
-          : [
-              ...prev,
-              {
-                id: data.message.id,
-                scope: data.message.scope,
-                senderUserId: data.message.senderUserId,
-                senderName: data.message.senderName,
-                body: plaintext,
-                createdAt: data.message.createdAt,
-                systemFlag: false,
-              },
-            ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-      );
-    },
-    [session, me, e2ee],
-  );
-
-  // Next: the server must forget the old pairing before we queue again, so
-  // this one waits for the DELETE.
-  const onNext = useCallback(async () => {
-    try {
-      await fetch("/api/stranger/start", { method: "DELETE" });
-    } catch {
-      /* ignore */
+    if (scope) {
+      rememberRoom({ id: scope, kind: "stranger", title: session?.partnerName ?? t("chatTitleDefault"), active: !ended, ownerId: me?.id });
+      if (ended) touchRoom(scope, { active: false });
     }
-    setAttempt((a) => a + 1);
-  }, []);
+  }, [scope, session?.partnerName, ended, me?.id, t]);
 
-  // Leave is local-first: navigate now, tell the server in the background.
-  const onLeave = useCallback(() => {
-    void fetch("/api/stranger/start", { method: "DELETE", keepalive: true }).catch(
-      () => {},
-    );
+  const leave = useCallback(() => {
+    const id = currentSession.current;
+    if (id) touchRoom(`stranger:${id}`, { active: false });
+    void fetch("/api/stranger/start", { method: "DELETE", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(id ? { sessionId: id } : {}) }).catch(() => {});
     router.push("/");
   }, [router]);
+  const next = useCallback(async () => {
+    if (switching) return;
+    setSwitching(true);
+    const id = currentSession.current;
+    try {
+      const res = await fetch("/api/stranger/start", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify(id ? { sessionId: id } : {}) });
+      if (!res.ok) throw new Error("Leave failed");
+      if (id) touchRoom(`stranger:${id}`, { active: false });
+      setAttempt(n => n + 1);
+    } catch { setSwitching(false); setNetError(true); }
+  }, [switching]);
 
-  // ---- Render ------------------------------------------------------------
-  if (netError) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <h1 className="text-2xl font-bold">{t("serviceUnavailable")}</h1>
-          <p className="mt-6 text-xs text-slate-500">
-            <a href="/" className="hover:underline">
-              {t("backHome")}
-            </a>
-          </p>
+  const error = crypto.error || conversation.error;
+  const waiting = !session || !me;
+  return <ChatShell activeId={scope}>
+    {error && <p role="alert" className="border-b border-amber-700 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{error}</p>}
+    {waiting || (!crypto.key && !ended) || netError ? <main className="grid min-h-0 flex-1 place-items-center p-6 text-center">
+      <section className="max-w-md">
+        <h1 className="text-3xl font-bold">{t(netError ? "serviceUnavailable" : waiting ? "searchingTitle" : "cryptoHandshakeTitle")}</h1>
+        <p className="mt-3 text-sm text-slate-400">{waiting ? t("searchingBody") : "Encryption keys are being checked in your browser. No plaintext is sent."}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {(netError || error) && <button className="rounded-lg bg-indigo-500 px-4 py-2" onClick={() => void next()}>{t("nextBtn")}</button>}
+          <button className="rounded-lg border border-slate-700 px-4 py-2" onClick={leave}>{t("leaveBtn")}</button>
         </div>
-      </main>
-    );
-  }
-
-  if (!session || !me) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-fuchsia-300">
-            {t("searchingTag")}
-          </p>
-          <h1 className="text-3xl font-bold sm:text-4xl">{t("searchingTitle")}</h1>
-          <p className="mt-3 text-sm text-slate-400">{t("searchingBody")}</p>
-          <div className="mx-auto mt-8 flex max-w-sm items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm text-slate-300 ring-1 ring-slate-800">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-indigo-500" />
-            </span>
-            {t("searchingStatus")}
-          </div>
-          <p className="mt-6 text-xs text-slate-500">
-            <a href="/" className="hover:underline">
-              {t("backHome")}
-            </a>
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!e2ee.identity || !e2ee.partnerKeyReady) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">
-            🔐 {t("cryptoHandshakeTitle")}
-          </p>
-          <h1 className="text-3xl font-bold sm:text-4xl">
-            {t("cryptoHandshakeTitle")}
-          </h1>
-          <p className="mt-3 text-sm text-slate-400">{t("cryptoHandshakeBody")}</p>
-          <div className="mx-auto mt-8 flex max-w-sm items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm text-slate-300 ring-1 ring-slate-800">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            </span>
-            {t("cryptoHandshakeStatus")}
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  const title = session.partnerName
-    ? t("chatTitleWith", { name: session.partnerName })
-    : t("chatTitleDefault");
-  const status = ended
-    ? { kind: "warn" as const, text: t("statusPartnerLeft") }
-    : { kind: "ok" as const, text: t("statusConnected") };
-
-  return (
-    <ChatShell activeId={`stranger:${session.sessionId}`}>
-      <ChatWindow
-        initialMessages={messages}
-        externalMessages={messages}
-        manageSSE={false}
-        selfUserId={me.id}
-        selfName={me.displayName}
-        apiBase={`/api/stranger/messages/${session.sessionId}`}
-        historyId={`stranger:${session.sessionId}`}
-        partnerName={session.partnerName ?? undefined}
-        partnerLabel={t("partnerLabel")}
-        title={title}
-        subtitle={t("chatSubtitle")}
-        status={status}
-        onNext={onNext}
-        onLeave={onLeave}
-        disabled={ended}
-        placeholder={t("inputPlaceholder")}
-        customSend={sendEncrypted}
-        encrypted
-      />
-    </ChatShell>
-  );
+      </section>
+    </main> : <ChatWindow key={session!.sessionId} initialMessages={[]} externalMessages={conversation.messages} manageSSE={false}
+      selfUserId={me!.id} selfName={me!.displayName} apiBase={`/api/stranger/messages/${session!.sessionId}`} historyId={scope!}
+      title={session!.partnerName ? t("chatTitleWith", { name: session!.partnerName }) : t("chatTitleDefault")}
+      subtitle={t("chatSubtitle")} status={{ kind: ended ? "warn" : conversation.connected ? "ok" : "warn", text: t(ended ? "statusPartnerLeft" : conversation.connected ? "statusConnected" : "loading") }}
+      onNext={next} onLeave={leave} disabled={ended || switching || !conversation.connected || !!crypto.error} customSend={conversation.send} encrypted={!!crypto.key} headerRight={<EncryptionInfo code={crypto.code} />} />}
+  </ChatShell>;
 }
