@@ -1,3 +1,7 @@
+import { translationCompletionsA } from "./i18n-completion-a";
+import { translationCompletionsB } from "./i18n-completion-b";
+import { translationCompletionsC } from "./i18n-completion-c";
+
 export const languages = [
   { code: "en", name: "English", dir: "ltr" },
   { code: "zh", name: "中文", dir: "ltr" },
@@ -129,10 +133,43 @@ const en = {
   keepChatting: "Keep chatting",
   endChat: "End chat",
   endAndNext: "End & find next",
+  soundOn: "Sound on — turn notification sounds off",
+  soundOff: "Sound off — turn notification sounds on",
+  typingIndicator: "typing…",
+  guideNav: "Safety guide",
+  guideEyebrow: "Real talk about random chat",
+  guideTitle: "Common problems, and how to handle them.",
+  guideCopy: "Stranger chat is unpredictable. Knowing what usually happens — and what to do — keeps it kind, private, and safe for you.",
+  guideGhostingTitle: "Someone disappears mid-chat",
+  guideGhostingCopy: "Being left without a goodbye is normal here. Don't chase, guilt-trip, or insult the other person. End the chat and find a new match; nobody owes you a farewell.",
+  guideScamTitle: "Money, crypto, or gift-card requests",
+  guideScamCopy: "Never pay, invest, share codes, or accept \"verification\" links. Leave immediately, report it as a scam, and warn people you know.",
+  guideHarassTitle: "Harassment, hate, or threats",
+  guideHarassCopy: "Don't argue or retaliate. Leave the chat, send a report, and save anything you need as evidence. Threats of violence belong with local authorities.",
+  guideSexualTitle: "Sexual pressure or explicit content",
+  guideSexualCopy: "You decide what you share. Say no once, then leave — you don't have to justify it. Reports add matching friction to repeat offenders.",
+  guidePrivacyTitle: "Requests for personal details",
+  guidePrivacyCopy: "Keep your full name, address, workplace, school, and social handles private. Never move to another app or share photos with a stranger.",
+  guideSpamTitle: "Bots, spam, and suspicious links",
+  guideSpamCopy: "Don't open links or download files. Report the chat as spam and start a new one; attention is exactly what bots want.",
+  guideStepsTitle: "If a chat feels wrong, do this in order:",
+  guideStep1: "Stop replying — no explanation or debate is needed.",
+  guideStep2: "Use Report to send a safety signal.",
+  guideStep3: "Tap End & find next to disconnect immediately.",
+  guideStep4: "If you are in danger, contact local emergency services.",
+  guideMinorTitle: "Minors, illegal content, or self-harm",
+  guideMinorCopy: "Never engage with sexual content involving minors, and do not redistribute illegal material. If someone is at immediate risk of harming themselves or others, leave the chat and contact local emergency services or a trusted support line. Do not try to counsel them through an anonymous chat.",
+  guideConsentTitle: "Screenshots, sharing, and consent",
+  guideConsentCopy: "Treat every message as something that could be screenshotted and shared. Ask before quoting someone elsewhere, never forward a stranger's private details, and remember that ending a chat cannot erase what the other person already saved.",
+  guideAccept: "I understand — start chatting",
+  guideAcceptAria: "Confirm you have read the safety guide",
+  guideFootnote: "Luma cannot read or review end-to-end encrypted messages. Reports only add temporary matching friction; they do not create a human-reviewed case. Take breaks, and talk only about what you're comfortable sharing.",
+  couldNotStart: "Could not start a conversation right now. Please try again in a moment.",
+  yourChatsEmpty: "No conversations yet. Met strangers and invites you keep will appear here.",
 } as const;
 
 export type TranslationKey = keyof typeof en;
-type Dictionary = Partial<Record<TranslationKey, string>>;
+export type Dictionary = Partial<Record<TranslationKey, string>>;
 
 const translations: Record<LanguageCode, Dictionary> = {
   en,
@@ -404,8 +441,33 @@ const translations: Record<LanguageCode, Dictionary> = {
   },
 };
 
+// Merge per language: a plain spread would replace a whole language object when
+// two completion files both translate it, silently dropping the earlier keys.
+const translationCompletions = [
+  translationCompletionsA,
+  translationCompletionsB,
+  translationCompletionsC,
+].reduce<Partial<Record<LanguageCode, Dictionary>>>((merged, source) => {
+  for (const [code, dictionary] of Object.entries(source) as [LanguageCode, Dictionary][]) {
+    merged[code] = { ...merged[code], ...dictionary };
+  }
+  return merged;
+}, {});
+
 export function translate(language: LanguageCode, key: TranslationKey): string {
-  return translations[language][key] ?? en[key];
+  return (
+    translations[language][key] ??
+    translationCompletions[language]?.[key] ??
+    en[key]
+  );
+}
+
+/** Used by tests to assert that every key is translated in every language. */
+export function untranslatedKeys(language: LanguageCode): TranslationKey[] {
+  return (Object.keys(en) as TranslationKey[]).filter(
+    (key) =>
+      !translations[language][key] && !translationCompletions[language]?.[key],
+  );
 }
 
 export function isLanguageCode(value: string | null | undefined): value is LanguageCode {

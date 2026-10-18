@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { chatParticipants, chatRooms } from "@/db/schema";
 import { isValidClientId, isValidRoomId } from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
+import { notifyRoomEnded } from "@/lib/chat-events";
 import { bearerCredential, isTrustedJsonMutation } from "@/lib/request-security";
 import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, eq } from "drizzle-orm";
@@ -65,6 +66,7 @@ export async function DELETE(
       .set({ status: "ended", endedAt: now, updatedAt: now })
       .where(eq(chatRooms.id, roomId));
   });
+  notifyRoomEnded(roomId);
 
   return NextResponse.json({ ok: true });
 }

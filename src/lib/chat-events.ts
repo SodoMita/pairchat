@@ -11,6 +11,8 @@ export type EncryptedMessageEnvelope = {
 export type LiveChatEvent =
   | { type: "message"; message: EncryptedMessageEnvelope }
   | { type: "peer"; connected: boolean }
+  | { type: "typing"; senderPublicId: string; active: boolean }
+  | { type: "ended" }
   | {
       type: "ack";
       messageId: string;
@@ -109,6 +111,42 @@ export function acknowledgeChatMessage(
 
 export function countParticipantStreams(roomId: string, clientId: string) {
   return registry.get(roomId)?.get(clientId)?.size ?? 0;
+}
+
+/**
+ * Tell every connected participant that the room was closed elsewhere, so the
+ * partner does not keep a composer open until the next slow status poll.
+ */
+export function notifyRoomEnded(roomId: string) {
+  const participants = registry.get(roomId);
+  if (!participants) return;
+  for (const listeners of participants.values()) {
+    for (const listener of listeners) listener({ type: "ended" });
+  }
+}
+
+/**
+ * Relay an ephemeral typing signal to the other participant only. Typing state
+ * is never stored and never leaves this process, matching the "text only,
+ * server-blind content" design.
+ */
+export function publishTypingState(
+  roomId: string,
+  senderAccessHash: string,
+  senderPublicId: string,
+  active: boolean,
+) {
+  const participants = registry.get(roomId);
+  if (!participants) return false;
+  let delivered = false;
+  for (const [clientId, listeners] of participants) {
+    if (clientId === senderAccessHash) continue;
+    for (const listener of listeners) {
+      listener({ type: "typing", senderPublicId, active });
+      delivered = true;
+    }
+  }
+  return delivered;
 }
 
 export function subscribeToChatMessages(

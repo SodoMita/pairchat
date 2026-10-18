@@ -45,8 +45,17 @@ import {
   type LocalConversation,
 } from "@/lib/local-chats";
 import {
+  installSoundUnlock,
+  isSoundEnabled,
+  playSound,
+  setSoundEnabled as persistSoundPreference,
+  unlockAudio,
+} from "@/lib/sound";
+import {
   AlertTriangle,
   ArrowRight,
+  Ban,
+  BookOpen,
   Bookmark,
   BookmarkCheck,
   Check,
@@ -69,6 +78,9 @@ import {
   Trash2,
   UserRound,
   Users,
+  Volume2,
+  VolumeX,
+  Wallet,
   X,
   Zap,
 } from "lucide-react";
@@ -176,11 +188,15 @@ function Header({
   language,
   onLanguage,
   inRoom = false,
+  soundEnabled,
+  onToggleSound,
 }: {
   t: Translator;
   language: LanguageCode;
   onLanguage: (language: LanguageCode) => void;
   inRoom?: boolean;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
 }) {
   return (
     <header className="relative z-30 mx-auto flex h-[76px] w-full max-w-[1500px] items-center justify-between gap-3 px-5 sm:px-8">
@@ -195,6 +211,7 @@ function Header({
         {!inRoom && (
           <nav className="hidden items-center gap-7 text-[12px] font-semibold text-[#66706d] lg:flex">
             <a className="transition hover:text-[#1e2927]" href="#how-it-works">{t("howItWorks")}</a>
+            <a className="transition hover:text-[#1e2927]" href="#safety-guide">{t("guideNav")}</a>
             <a className="transition hover:text-[#1e2927]" href="#safety">{t("safety")}</a>
             <span className="flex items-center gap-2 rounded-full border border-[#dfe2db] bg-white/70 px-3.5 py-2 text-[11px] text-[#3f4946]">
               <MessageCircle size={13} className="text-[#6c9161]" />
@@ -208,6 +225,16 @@ function Header({
           </span>
         )}
         <LanguageSelector language={language} onLanguage={onLanguage} t={t} />
+        <button
+          type="button"
+          onClick={onToggleSound}
+          aria-pressed={soundEnabled}
+          aria-label={soundEnabled ? t("soundOn") : t("soundOff")}
+          title={soundEnabled ? t("soundOn") : t("soundOff")}
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition ${soundEnabled ? "border-[#d6e5d0] bg-[#edf5e9] text-[#57774e] hover:bg-[#e4efdf]" : "border-[#dfe2db] bg-white/80 text-[#98a09c] hover:bg-white"}`}
+        >
+          {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </button>
       </div>
     </header>
   );
@@ -286,7 +313,7 @@ function ConversationSidebar({
         {conversations.length === 0 ? (
           <div className="flex min-w-[220px] items-center gap-3 rounded-2xl border border-dashed border-[#d8dbd4] bg-white/55 p-4 lg:min-w-0 lg:flex-col lg:py-8 lg:text-center">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#edf3e9] text-[#78956f]"><MessageCircle size={16} /></span>
-            <p className="text-[10px] leading-5 text-[#8b9390]">{t("yourChatsCopy")}</p>
+            <p className="text-[10px] leading-5 text-[#8b9390]">{t("yourChatsEmpty")}</p>
           </div>
         ) : conversations.map((conversation) => {
           const active = conversation.status !== "ended";
@@ -354,6 +381,10 @@ function HomeScreen({
   onLanguage,
   onOpenChat,
   onDeleteHistory,
+  soundEnabled,
+  onToggleSound,
+  guideAcknowledged,
+  onAcknowledgeGuide,
 }: {
   onRandom: () => void;
   onPrivate: () => void;
@@ -365,16 +396,38 @@ function HomeScreen({
   onLanguage: (language: LanguageCode) => void;
   onOpenChat: (conversation: LocalConversation) => void;
   onDeleteHistory: (conversation: LocalConversation) => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
+  guideAcknowledged: boolean;
+  onAcknowledgeGuide: () => void;
 }) {
   const features = [
     [Zap, t("instantTitle"), t("instantCopy")],
     [LockKeyhole, t("privateTitle"), t("privateCopy")],
     [Link2, t("linkTitle"), t("linkCopy")],
   ] as const;
+  const guideItems = [
+    [Users, t("guideGhostingTitle"), t("guideGhostingCopy")],
+    [Wallet, t("guideScamTitle"), t("guideScamCopy")],
+    [AlertTriangle, t("guideHarassTitle"), t("guideHarassCopy")],
+    [Ban, t("guideSexualTitle"), t("guideSexualCopy")],
+    [LockKeyhole, t("guidePrivacyTitle"), t("guidePrivacyCopy")],
+    [Link2, t("guideSpamTitle"), t("guideSpamCopy")],
+    [Heart, t("guideMinorTitle"), t("guideMinorCopy")],
+    [MessageCircle, t("guideConsentTitle"), t("guideConsentCopy")],
+  ] as const;
+  const [showAllGuide, setShowAllGuide] = useState(false);
+  const visibleGuideItems = showAllGuide ? guideItems : guideItems.slice(0, 6);
+  const guideSteps = [
+    [MessageCircle, t("guideStep1")],
+    [Flag, t("guideStep2")],
+    [LogOut, t("guideStep3")],
+    [Heart, t("guideStep4")],
+  ] as const;
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#f8f6f0]">
-      <Header t={t} language={language} onLanguage={onLanguage} />
+      <Header t={t} language={language} onLanguage={onLanguage} soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
       <main className="home-with-sidebar mx-auto grid w-full max-w-[1500px] lg:grid-cols-[280px_minmax(0,1fr)]">
         <ConversationSidebar conversations={conversations} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
         <div className="min-w-0">
@@ -393,7 +446,20 @@ function HomeScreen({
               {t("heroLead")} <span className="relative text-[#ff6747]">{t("heroAccent")}<svg className="absolute -bottom-2 start-1 w-[96%]" viewBox="0 0 240 12" fill="none" aria-hidden="true"><path d="M3 8C62 2 158 2 237 6" stroke="#ffb39f" strokeWidth="5" strokeLinecap="round" /></svg></span>
             </h1>
             <p className="mt-7 max-w-[530px] text-[17px] leading-[1.75] text-[#68716e] sm:text-[18px]">{t("heroCopy")}</p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <label className="mt-7 flex max-w-[530px] cursor-pointer items-start gap-3 rounded-2xl border border-[#e4e4dc] bg-white/80 p-3.5 text-[11px] leading-5 text-[#68716e] transition hover:border-[#d9ddd5] hover:bg-white">
+              <input
+                type="checkbox"
+                checked={guideAcknowledged}
+                onChange={onAcknowledgeGuide}
+                aria-label={t("guideAcceptAria")}
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#ff6747]"
+              />
+              <span>
+                <a href="#safety-guide" className="font-extrabold text-[#394340] underline decoration-[#f2b7a5] decoration-2 underline-offset-2 hover:text-[#c65338]">{t("guideAccept")}</a>
+                <span className="mt-0.5 block text-[10px] text-[#98a09c]">{t("guideNav")} · {t("anonymousDesign")}</span>
+              </span>
+            </label>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button onClick={onRandom} disabled={busy} className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-[#ff6747] px-7 text-[14px] font-extrabold text-white shadow-[0_12px_28px_rgba(255,103,71,0.24)] transition hover:-translate-y-0.5 hover:bg-[#f65c3d] disabled:opacity-60">
                 {busy ? <LoaderCircle size={18} className="animate-spin" /> : <Shuffle size={18} />}{t("chatStranger")}<ArrowRight size={17} className="transition-transform group-hover:translate-x-1 rtl:rotate-180" />
               </button>
@@ -420,7 +486,51 @@ function HomeScreen({
           </div>
         </section>
 
-        <section id="safety" className="mx-auto max-w-[1180px] px-5 py-20 sm:px-8 lg:py-24">
+        <section id="safety-guide" className="mx-auto max-w-[1180px] scroll-mt-20 px-5 py-16 sm:px-8 lg:py-24">
+          <div className="max-w-[760px]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#e7ddd5] bg-white/75 px-3.5 py-2 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#8a6d63]">
+              <BookOpen size={13} className="text-[#ff6747]" /> {t("guideEyebrow")}
+            </div>
+            <h2 className="mt-5 text-[clamp(1.9rem,4vw,3.15rem)] font-extrabold leading-[1.05] tracking-[-0.05em] text-[#1e2927]">{t("guideTitle")}</h2>
+            <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideCopy")}</p>
+          </div>
+
+          <div className="mt-9 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleGuideItems.map(([ItemIcon, title, copy]) => (
+              <article key={title} className="group rounded-2xl border border-[#e7e6df] bg-white/80 p-5 transition hover:-translate-y-0.5 hover:border-[#f0c5b7] hover:bg-white hover:shadow-[0_14px_34px_rgba(50,58,55,0.07)]">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]"><ItemIcon size={18} /></span>
+                <h3 className="mt-4 text-[13px] font-extrabold text-[#2b3733]">{title}</h3>
+                <p className="mt-2 text-[11.5px] leading-5 text-[#7c8581]">{copy}</p>
+              </article>
+            ))}
+          </div>
+          {!showAllGuide && (
+            <button
+              type="button"
+              onClick={() => setShowAllGuide(true)}
+              className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-xl border border-[#e1e3dd] bg-white/80 px-4 text-[11px] font-extrabold text-[#59635f] transition hover:bg-white"
+            >
+              <ChevronRight size={14} className="text-[#ff6747] rtl:rotate-180" /> {t("guideNav")}
+            </button>
+          )}
+
+          <div className="mt-6 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
+            <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start">
+              <h3 className="text-[19px] font-extrabold leading-7 tracking-[-0.03em] text-[#2a3531]">{t("guideStepsTitle")}</h3>
+              <ol className="grid gap-2.5 sm:grid-cols-2">
+                {guideSteps.map(([StepIcon, label], index) => (
+                  <li key={label} className="flex items-start gap-2.5 rounded-xl bg-white/85 px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#5a6661]">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#e9f1e3] text-[#5c7d54]"><StepIcon size={12} /></span>
+                    <span><span className="me-1 text-[9px] font-extrabold text-[#9aa79f]">{index + 1}.</span>{label}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <p className="border-t border-[#e1e6da] px-6 py-4 text-[10.5px] leading-5 text-[#7d887f] sm:px-8">{t("guideFootnote")}</p>
+          </div>
+        </section>
+
+        <section id="safety" className="mx-auto max-w-[1180px] scroll-mt-20 px-5 py-20 sm:px-8 lg:py-24">
           <div className="grid gap-8 rounded-[32px] bg-[#202c29] p-8 text-white sm:p-12 lg:grid-cols-[1fr_auto] lg:items-center lg:px-14">
             <div className="max-w-2xl">
               <div className="mb-4 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#a9caa0]"><ShieldCheck size={16} /> {t("safetyEyebrow")}</div>
@@ -448,6 +558,8 @@ function MatchingScreen({
   onLanguage,
   onOpenChat,
   onDeleteHistory,
+  soundEnabled,
+  onToggleSound,
 }: {
   onCancel: () => void;
   conversations: LocalConversation[];
@@ -457,10 +569,12 @@ function MatchingScreen({
   onLanguage: (language: LanguageCode) => void;
   onOpenChat: (conversation: LocalConversation) => void;
   onDeleteHistory: (conversation: LocalConversation) => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
 }) {
   return (
     <div className="min-h-screen bg-[#f8f6f0]">
-      <Header t={t} language={language} onLanguage={onLanguage} inRoom />
+      <Header t={t} language={language} onLanguage={onLanguage} inRoom soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
       <main className="mx-auto grid min-h-[calc(100vh-76px)] w-full max-w-[1400px] lg:grid-cols-[280px_minmax(0,1fr)]">
         <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
         <div className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20 pt-10 lg:pt-0">
@@ -508,10 +622,20 @@ function ChatScreen({
   onPause,
   onLeave,
   onNext,
+  partnerTyping,
+  notice,
+  onDismissNotice,
+  soundEnabled,
+  onToggleSound,
 }: {
   room: RoomSnapshot;
   clientId: string;
   messages: ChatMessage[];
+  partnerTyping: boolean;
+  notice: string;
+  onDismissNotice: () => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
   draft: string;
   sending: boolean;
   copied: boolean;
@@ -619,7 +743,7 @@ function ChatScreen({
 
   return (
     <div className="min-h-screen bg-[#f5f3ed]">
-      <Header t={t} language={language} onLanguage={onLanguage} inRoom />
+      <Header t={t} language={language} onLanguage={onLanguage} inRoom soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
       <main className="mx-auto max-w-[1400px] px-3 pb-5 sm:px-6 sm:pb-8">
         <div className="chat-shell grid h-[calc(100vh-102px)] min-h-[610px] overflow-hidden rounded-[26px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.10)] lg:grid-cols-[280px_1fr]">
           <ConversationSidebar conversations={conversations} currentRoomId={room.id} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} contained />
@@ -630,7 +754,7 @@ function ChatScreen({
                 <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54] lg:hidden"><UserRound size={18} /></div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2"><h1 className="truncate text-[14px] font-extrabold text-[#293430]">{room.kind === "private" ? t("privateConversation") : t("yourConversation")}</h1>{room.kind === "private" && <LockKeyhole size={12} className="text-[#84918c]" />}</div>
-                  <p className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-[#8b9390]"><span className={`h-1.5 w-1.5 rounded-full ${ended ? "bg-[#b7bcb8]" : waiting || !secureReady ? "animate-pulse bg-[#e5a64f]" : "bg-[#72b05f]"}`} />{ended ? t("conversationEnded") : waiting ? t("waitingSomeone") : !secureReady ? t("connecting") : t("connected")}</p>
+                  <p className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-[#8b9390]" aria-live="polite"><span className={`h-1.5 w-1.5 rounded-full ${ended ? "bg-[#b7bcb8]" : waiting || !secureReady ? "animate-pulse bg-[#e5a64f]" : "bg-[#72b05f]"}`} />{ended ? t("conversationEnded") : waiting ? t("waitingSomeone") : !secureReady ? t("connecting") : partnerTyping ? t("typingIndicator") : t("connected")}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -734,6 +858,16 @@ function ChatScreen({
         </div>
       </main>
 
+      {notice && (
+        <div role="status" aria-live="polite" className="fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-[#27312e] px-4 py-3 text-[11.5px] font-bold text-white shadow-[0_16px_40px_rgba(20,28,25,0.3)]">
+          <AlertTriangle size={15} className="shrink-0 text-[#f3a58f]" />
+          <span>{notice}</span>
+          <button type="button" onClick={onDismissNotice} className="grid h-6 w-6 shrink-0 place-items-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white" aria-label={t("cancel")}>
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {reportOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#17211f]/45 px-5 backdrop-blur-[3px]" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target && !reporting) setReportOpen(false); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="report-title" className="w-full max-w-[440px] rounded-[26px] border border-white/70 bg-white p-6 shadow-[0_28px_90px_rgba(25,34,31,0.28)] sm:p-8">
@@ -792,8 +926,64 @@ export default function ChatApp() {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [soundOn, setSoundOn] = useState(true);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [guideAcknowledged, setGuideAcknowledged] = useState(false);
   const openedRoomId = useRef<string | null>(null);
+  const matchedSoundRoom = useRef<string | null>(null);
+  const endedSoundRoom = useRef<string | null>(null);
+  const typingTimer = useRef<number | undefined>(undefined);
+  const lastTypingSignal = useRef(0);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
+
+  useEffect(() => {
+    setSoundOn(isSoundEnabled());
+    return installSoundUnlock();
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const acknowledgeGuide = useCallback(() => {
+    setGuideAcknowledged((current) => !current);
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    const next = !soundOn;
+    setSoundOn(next);
+    persistSoundPreference(next);
+    if (next) {
+      // Play a short confirmation so people know the setting really works.
+      void unlockAudio().then((unlocked) => {
+        if (unlocked) playSound("toggle");
+      });
+    }
+  }, [soundOn]);
+
+  useEffect(() => {
+    setPartnerTyping(false);
+  }, [room?.id]);
+
+  useEffect(() => {
+    if (!room || screen !== "chat") return;
+    if (room.status === "active" && room.partnerPresent && matchedSoundRoom.current !== room.id) {
+      matchedSoundRoom.current = room.id;
+      playSound("matched");
+    }
+  }, [room, screen]);
+
+  useEffect(() => {
+    if (!room) return;
+    const ended = room.status === "ended" || !room.participantActive;
+    if (ended && matchedSoundRoom.current === room.id && endedSoundRoom.current !== room.id) {
+      endedSoundRoom.current = room.id;
+      playSound("left");
+    }
+  }, [room]);
 
   useEffect(() => {
     setConversations(loadLocalConversations());
@@ -926,6 +1116,34 @@ export default function ChatApp() {
     setMessages(next.find((item) => item.roomId === roomId)?.messages ?? []);
   }, []);
 
+  const markPartnerTyping = useCallback(() => {
+    setPartnerTyping(true);
+    if (typingTimer.current) window.clearTimeout(typingTimer.current);
+    typingTimer.current = window.setTimeout(() => setPartnerTyping(false), 4_500);
+  }, []);
+
+  const sendTypingSignal = useCallback((active: boolean) => {
+    if (!room || !clientId || room.status !== "active") return;
+    if (active) {
+      const now = Date.now();
+      if (now - lastTypingSignal.current < 2_500) return;
+      lastTypingSignal.current = now;
+    } else {
+      lastTypingSignal.current = 0;
+    }
+    void fetch(`/api/rooms/${room.id}/typing`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${clientId}`,
+      },
+      body: JSON.stringify({ active }),
+      cache: "no-store",
+    }).catch(() => {
+      // Typing is cosmetic; ignore transient relay errors.
+    });
+  }, [clientId, room]);
+
   const startRandom = useCallback(async () => {
     if (!abuseSession) return;
     const participantId = createParticipantId();
@@ -940,9 +1158,11 @@ export default function ChatApp() {
         signingKey: serializeSigningKey(encryption),
       });
       acceptRoom(data.room, participantId, encryption);
-    } catch (caught) {
-      setError(caught instanceof Error && caught.message ? caught.message : t("findError"));
-      setScreen("error");
+    } catch {
+      setError(t("couldNotStart"));
+      setNotice(t("couldNotStart"));
+      playSound("error");
+      setScreen("home");
     } finally {
       setBusy(false);
     }
@@ -1095,7 +1315,7 @@ export default function ChatApp() {
     const roomId = room.id;
     // Presence comes from the relay's SSE `peer` events; this slow safety-net
     // poll only reconciles room status and skips work while the tab is hidden.
-    const poll = window.setInterval(async () => {
+    const refresh = async () => {
       if (document.visibilityState !== "visible") return;
       try {
         const data = await requestJson<{ room: RoomSnapshot }>(
@@ -1107,7 +1327,9 @@ export default function ChatApp() {
       } catch {
         // Keep local history visible during brief connectivity drops.
       }
-    }, 20_000);
+    };
+    void refresh();
+    const poll = window.setInterval(refresh, 20_000);
     return () => window.clearInterval(poll);
   }, [clientId, room?.id, screen]);
 
@@ -1144,12 +1366,17 @@ export default function ChatApp() {
         if (!signatureValid) return;
         const key = await getRoomCryptoKey(conversation?.encryption, roomSnapshot);
         const body = await decryptMessage(key, roomId, envelope);
+        const fromPartner = envelope.senderPublicId !== roomSnapshot.participantPublicId;
         storeMessage(roomId, {
           id: envelope.id,
           body,
           senderPublicId: envelope.senderPublicId,
           createdAt: envelope.createdAt,
         });
+        if (fromPartner) {
+          playSound("received");
+          setPartnerTyping(false);
+        }
 
         // Acknowledge only after sender-signature verification and AEAD decryption succeed.
         if (envelope.senderPublicId !== roomSnapshot.participantPublicId) {
@@ -1194,6 +1421,26 @@ export default function ChatApp() {
         } catch {
           setRelayReady(false);
         }
+      }
+      if (eventType === "typing") {
+        try {
+          const typing = JSON.parse(payload) as { senderPublicId?: string; active?: boolean };
+          if (typing.senderPublicId && typing.senderPublicId !== roomSnapshot.participantPublicId) {
+            if (typing.active === true) markPartnerTyping();
+            else setPartnerTyping(false);
+          }
+        } catch {
+          // Ignore malformed ephemeral typing events.
+        }
+      }
+      if (eventType === "ended") {
+        setPartnerTyping(false);
+        setRoom((current) =>
+          current && current.id === roomId
+            ? { ...current, status: "ended", participantActive: false }
+            : current,
+        );
+        setConversations(setLocalRoomStatus(roomId, "ended"));
       }
       if (eventType === "ack") {
         void (async () => {
@@ -1269,7 +1516,7 @@ export default function ChatApp() {
       setRelayReady(false);
       abort.abort();
     };
-  }, [clientId, room?.id, room?.partnerPublicKey, room?.status, screen, storeMessage]);
+  }, [clientId, markPartnerTyping, room?.id, room?.partnerPublicKey, room?.status, screen, storeMessage]);
 
   const pauseRoom = useCallback(() => {
     openedRoomId.current = null;
@@ -1331,8 +1578,8 @@ export default function ChatApp() {
         signingKey: serializeSigningKey(encryption),
       });
       acceptRoom(data.room, participantId, encryption);
-    } catch (caught) {
-      setError(caught instanceof Error && caught.message ? caught.message : t("nextError"));
+    } catch {
+      setError(t("nextError"));
       setScreen("error");
     } finally {
       setBusy(false);
@@ -1369,13 +1616,18 @@ export default function ChatApp() {
         createdAt: envelope.createdAt,
         delivery: "sent",
       });
+      playSound("sent");
+      sendTypingSignal(false);
+      setNotice("");
     } catch {
       setDraft(body);
       setError(t("sendError"));
+      setNotice(t("sendError"));
+      playSound("error");
     } finally {
       setSending(false);
     }
-  }, [clientId, draft, relayReady, room, safetyCode, sending, storeMessage, t]);
+  }, [clientId, draft, relayReady, room, safetyCode, sendTypingSignal, sending, storeMessage, t]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -1383,6 +1635,12 @@ export default function ChatApp() {
       void sendMessage();
     }
   };
+
+  const updateDraft = useCallback((value: string) => {
+    setDraft(value);
+    if (value.trim()) sendTypingSignal(true);
+    else sendTypingSignal(false);
+  }, [sendTypingSignal]);
 
   const copyInvite = async () => {
     if (!room) return;
@@ -1451,6 +1709,28 @@ export default function ChatApp() {
   const openLocalChat = useCallback((conversation: LocalConversation) => {
     if (room?.id === conversation.roomId) return;
     openedRoomId.current = null;
+    if (conversation.kind === "random") {
+      // Random rooms are resumed from local encrypted state; the relay's status
+      // poll then refreshes partner keys or marks the room as ended.
+      setClientId(conversation.clientId);
+      setConversations(loadLocalConversations());
+      setMessages(conversation.messages);
+      setRoom({
+        id: conversation.roomId,
+        kind: "random",
+        status: conversation.status,
+        participantPublicId: conversation.publicId ?? "",
+        partnerPublicId: null,
+        partnerPresent: false,
+        partnerOnline: false,
+        partnerPublicKey: null,
+        partnerSigningKey: null,
+        participantActive: conversation.status !== "ended",
+        createdAt: conversation.createdAt,
+      });
+      setScreen("chat");
+      return;
+    }
     setScreen("loading");
     const secret = conversation.encryption?.mode === "private"
       ? conversation.encryption.secret
@@ -1463,14 +1743,14 @@ export default function ChatApp() {
   }
 
   if (screen === "error") {
-    return <div className="min-h-screen bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} /><main className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
+    return <div className="min-h-screen bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} soundEnabled={soundOn} onToggleSound={toggleSound} /><main className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
   }
 
-  if (screen === "matching") return <MatchingScreen onCancel={cancelSearch} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} />;
+  if (screen === "matching") return <MatchingScreen onCancel={cancelSearch} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={setDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
+    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
   }
 
-  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} />;
+  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} guideAcknowledged={guideAcknowledged} onAcknowledgeGuide={acknowledgeGuide} />;
 }

@@ -76,6 +76,28 @@ Abuse sessions and address-scoped rate limits are friction, not a proof of perso
 
 Local history is trusted to the browser profile. Malware, malicious extensions, another local user with profile access, or an XSS vulnerability could read local history and keys.
 
+## Community safety and abuse handling
+
+Luma is a conversation surface, not a moderation system. Because message content is end-to-end
+encrypted, the relay can never inspect a transcript, and a report is a content-free safety signal,
+not a case file. The user-facing guide on the home page (`#safety-guide`) and in `README.md`
+explains how to behave and react in the situations that are common in anonymous chat: ghosting,
+money or crypto scams, harassment and threats, sexual pressure or explicit content, requests for
+personal details, spam and phishing links, and disclosures involving minors or self-harm.
+
+Practical expectations for operators and for users:
+
+- A report applies a reversible matching cooldown derived from the reported abuse session; it does
+  not identify, ban, or notify the reported person, and it is not human-reviewed.
+- Privacy boundaries are the user's responsibility: never share money, one-time codes, identity
+  documents, addresses, social handles, or photos with a stranger, and never move to another app.
+- Immediate danger belongs with local emergency services. Luma cannot intervene in a live chat and
+  cannot recover deleted local history.
+- End a chat as soon as it feels wrong. Leaving erases the local room key; it cannot erase anything
+  the other participant already saved.
+- Keep the sound preference and language choice local; both are stored in `localStorage` and never
+  transmitted to the relay.
+
 ## Reporting
 
 Use only rooms and identities you created for security testing. Do not enumerate room IDs, intercept live traffic, or access other users' conversations.

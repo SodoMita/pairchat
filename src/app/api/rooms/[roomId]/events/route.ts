@@ -67,12 +67,16 @@ export async function GET(
               ? event.message
               : event.type === "peer"
                 ? { connected: event.connected }
-                : {
-                    messageId: event.messageId,
-                    recipientPublicId: event.recipientPublicId,
-                    receivedAt: event.receivedAt,
-                    signature: event.signature,
-                  };
+                : event.type === "typing"
+                  ? { senderPublicId: event.senderPublicId, active: event.active }
+                  : event.type === "ended"
+                    ? { status: "ended" }
+                    : {
+                        messageId: event.messageId,
+                        recipientPublicId: event.recipientPublicId,
+                        receivedAt: event.receivedAt,
+                        signature: event.signature,
+                      };
           const id = event.type === "message" ? `id: ${event.message.id}\n` : "";
           controller.enqueue(
             encoder.encode(
