@@ -20,7 +20,7 @@ const ROOM_KEY_PREFIX = "chatterbox.e2ee.room-key.";
  * they see a clear missing-key state instead. Only the host may create
  * the initial key.
  */
-export function useRoomCrypto(roomId: string, canGenerate: boolean) {
+export function useRoomCrypto(roomId: string | null, canGenerate: boolean) {
   const [ready, setReady] = useState(false);
   const [keyMissing, setKeyMissing] = useState(false);
   const [keyB64, setKeyB64] = useState<string | null>(null);
@@ -32,6 +32,8 @@ export function useRoomCrypto(roomId: string, canGenerate: boolean) {
     setReady(false);
     setKeyMissing(false);
     keyRef.current = null;
+    // The room id and our role are only known after POST /enter.
+    if (!roomId) return;
 
     const localKeyName = `${ROOM_KEY_PREFIX}${roomId}`;
     const loadKey = async () => {

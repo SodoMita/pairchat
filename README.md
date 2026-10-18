@@ -2,8 +2,6 @@
 
 A text-only chat roulette and private room application built with Next.js, PostgreSQL, and end-to-end encryption.
 
-**Preview:** [https://3000-i7jbo8i4dbnx8fhkcjnjc.e2b.app](https://3000-i7jbo8i4dbnx8fhkcjnjc.e2b.app)
-
 ## Features
 
 ### Chat modes
@@ -71,18 +69,42 @@ npm start
 - **Rate limiting:** In-process token-bucket with per-route/per-user keys. Stale entries swept every 5 minutes.
 - **Session security:** `roulette_uid` cookie stores `<uuid>.<HMAC-SHA256>`. The HMAC is verified with `timingSafeEqual` before trusting the UUID. The cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` in production.
 
+## Network behaviour
+
+Pages are **statically rendered** (`○`/`●` in the build output) and make no
+per-request server work. All dynamic data comes from our own origin, and a CSP
+(`connect-src 'self'`, no third-party scripts/fonts/images) makes the browser
+refuse anything else.
+
+| Page | Requests after load |
+|------|---------------------|
+| `/` | `GET /api/stats` once, then every 30s **only while the tab is visible** (also gives the status dot) |
+| `/chat/stranger` | `POST /api/stranger/start` once per match, one `GET /api/stranger/events` SSE stream (pairing, partner key and "partner left" are *pushed*), one message SSE stream, one `PATCH` to publish my public key |
+| `/room/[id]` | `POST /api/rooms/[id]/enter` once (resolves id or invite code, claims the seat, returns who I am and my partner), one message SSE stream |
+| `/local`, `/local/[id]`, `/join` | none (local chat never touches the server) |
+
+There is no polling anywhere else, no `/api/me` call from the web app, and
+`<Link>` prefetching is disabled. The locale is detected client-side (no
+cookie), so nothing forces dynamic rendering and no extra cookie rides on each
+request. Known trade-offs: non-English visitors briefly see a blank page
+instead of English text while the locale is applied; and `script-src` still
+needs `'unsafe-inline'` for Next.js bootstrap scripts (statically rendered
+pages cannot carry a nonce).
+
 ## Testing
 
 ```bash
-# TypeScript strict check
-npm run typecheck
+npm run typecheck && npm run build
 
-# Production build
-npm run build
-
-# E2E crypto test (requires running server + database)
-node /tmp/e2e-crypto.mjs
+# API/SSE end-to-end tests (needs a running server + its database).
+# Real X25519/AES-GCM; asserts pages are static, nothing is loaded from other
+# origins, pairing/keys/room events are pushed, E2EE round-trips, tampering is
+# rejected, and the database only ever holds ciphertext envelopes.
+BASE=http://localhost:3000 DATABASE_URL=postgresql://... node tests/e2e-api.mjs
 ```
+
+These tests drive the HTTP/SSE API, **not a browser**; React client behaviour is
+covered by typecheck and build only.
 
 ## License
 

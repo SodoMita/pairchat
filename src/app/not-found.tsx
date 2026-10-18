@@ -12,10 +12,10 @@ export default function NotFound() {
         <div className="mb-6 text-6xl">🤷</div>
         <h1 className="text-3xl font-bold">404</h1>
         <p className="mt-3 text-sm text-slate-400">
-          This page doesn&rsquo;t exist or has expired.
+          {t("notFoundBody")}
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <Link
+          <Link prefetch={false}
             href="/"
             className="rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-fuchsia-400"
           >

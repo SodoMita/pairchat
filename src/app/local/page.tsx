@@ -72,7 +72,7 @@ export default function LocalChatLanding() {
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-10">
         <header className="flex items-center justify-between">
-          <Link
+          <Link prefetch={false}
             href="/"
             className="text-sm text-slate-400 hover:text-slate-200"
           >

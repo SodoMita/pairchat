@@ -13,7 +13,7 @@ export function JoinView() {
         <LanguagePicker />
       </div>
       <div className="w-full max-w-md">
-        <Link
+        <Link prefetch={false}
           href="/"
           className="mb-6 inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-fuchsia-300 hover:underline"
         >

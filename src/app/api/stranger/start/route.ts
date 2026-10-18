@@ -2,20 +2,26 @@ import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { matchmaking } from "@/db/schema";
+import { publish } from "@/lib/bus";
 import { getOrCreateUser } from "@/lib/session";
 import {
   findOrJoinQueue,
   getActiveStrangerSession,
+  getUserName,
   leaveStrangerSession,
+  userScope,
 } from "@/lib/chat";
 
 export const dynamic = "force-dynamic";
 
+/** X25519 public keys are 32 raw bytes = 43 base64url characters. */
+const PUBKEY_RE = /^[A-Za-z0-9_-]{43}$/;
+
 /**
- * GET — Poll for whether the current user has been paired yet.
- * Returns `{ state: "queued" }` while waiting or `{ state: "paired", sessionId, partnerId }` after pairing.
+ * GET — one-shot status (kept for API clients). The web app does not poll
+ * this: it opens `/api/stranger/events` and is pushed state instead.
  */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const user = await getOrCreateUser();
   const session = await getActiveStrangerSession(user.id);
   if (session) {
@@ -30,77 +36,71 @@ export async function GET(_req: NextRequest) {
 }
 
 /**
- * POST — Try to find a partner. If no one is waiting, enqueue and return queued.
+ * POST — enter the queue, or report the existing pairing. Also returns
+ * `me`, so the client never needs a separate `/api/me` round-trip.
+ * If this call completes a pairing, the waiting partner is pushed a
+ * `paired` event instead of having to poll for it.
  */
-export async function POST(req: NextRequest) {
+export async function POST() {
   const user = await getOrCreateUser();
+  const me = { id: user.id, displayName: user.displayName };
 
-  // If the user is already paired (page reload), just report.
   const existing = await getActiveStrangerSession(user.id);
   if (existing) {
     return Response.json({
       state: "paired",
       sessionId: existing.sessionId,
       partnerId: existing.partnerId,
-      partnerIdentityPubKey: existing.partnerIdentityPubKey,
+      partnerName: existing.partnerId
+        ? await getUserName(existing.partnerId)
+        : null,
+      partnerLeft: !existing.partnerId,
+      me,
     });
   }
 
-  // Accept the client's X25519 identity public key (base64url) and
-  // store it on the matchmaking row so the partner can fetch it for
-  // ECDH. The private key never leaves the browser.
-  let identityPubKey: string | null = null;
-  try {
-    const body = await req.json();
-    if (
-      body &&
-      typeof body === "object" &&
-      typeof (body as { identityPubKey?: unknown }).identityPubKey === "string"
-    ) {
-      identityPubKey = String(
-        (body as { identityPubKey: string }).identityPubKey,
-      ).slice(0, 64);
-    }
-  } catch {
-    /* no body — fine */
-  }
+  // `findOrJoinQueue` reuses an existing unpaired row, so a key published
+  // before queueing is preserved.
+  const paired = await findOrJoinQueue(user.id);
+  if (!paired) return Response.json({ state: "queued", me });
 
-  // Don't blow away an existing unpaired row — `findOrJoinQueue`
-  // reuses it and preserves the previously-published identity pub key.
-  const paired = await findOrJoinQueue(user.id, identityPubKey);
-  if (paired) {
-    return Response.json({
-      state: "paired",
+  publish(
+    userScope(paired.partnerId),
+    JSON.stringify({
+      type: "paired",
       sessionId: paired.sessionId,
-      partnerId: paired.partnerId,
-      partnerIdentityPubKey: null, // populated via /api/stranger/partner-key
-    });
-  }
-
-  return Response.json({ state: "queued" });
+      partnerId: user.id,
+      partnerName: user.displayName,
+    }),
+  );
+  return Response.json({
+    state: "paired",
+    sessionId: paired.sessionId,
+    partnerId: paired.partnerId,
+    partnerName: await getUserName(paired.partnerId),
+    me,
+  });
 }
 
 /**
- * PATCH — Publish the user's X25519 identity public key. The client
- * generates its keypair on mount and pushes the public key here. If
- * the user isn't in the queue yet we create a row for them; otherwise
- * we update their existing row(s).
+ * PATCH — publish my X25519 identity public key and push it to my partner
+ * (if paired). The server only ever sees public keys.
  */
 export async function PATCH(req: NextRequest) {
   const user = await getOrCreateUser();
-  let body: { identityPubKey?: string };
+  let body: { identityPubKey?: unknown };
   try {
-    body = (await req.json()) as { identityPubKey?: string };
+    body = (await req.json()) as { identityPubKey?: unknown };
   } catch {
     return Response.json({ error: "Bad JSON" }, { status: 400 });
   }
-  const pub = String(body.identityPubKey ?? "").slice(0, 64);
-  if (!pub) return Response.json({ error: "Missing key" }, { status: 400 });
+  const pub = typeof body.identityPubKey === "string" ? body.identityPubKey : "";
+  if (!PUBKEY_RE.test(pub)) {
+    return Response.json({ error: "Invalid public key" }, { status: 400 });
+  }
 
-  // Try to update the user's existing rows first (newest first). If
-  // none exist, insert a fresh queue row with the key.
   const existing = await db
-    .select()
+    .select({ id: matchmaking.id })
     .from(matchmaking)
     .where(eq(matchmaking.userId, user.id))
     .limit(1);
@@ -112,14 +112,27 @@ export async function PATCH(req: NextRequest) {
   } else {
     await db.insert(matchmaking).values({ userId: user.id, identityPubKey: pub });
   }
+
+  const session = await getActiveStrangerSession(user.id);
+  if (session?.partnerId) {
+    publish(
+      userScope(session.partnerId),
+      JSON.stringify({ type: "partner_key", key: pub }),
+    );
+  }
   return Response.json({ ok: true });
 }
 
-/**
- * DELETE — Leave the queue or the active session.
- */
-export async function DELETE(_req: NextRequest) {
+/** DELETE — leave the queue / active chat and tell the partner. */
+export async function DELETE() {
   const user = await getOrCreateUser();
+  const session = await getActiveStrangerSession(user.id);
+  if (session?.partnerId) {
+    publish(
+      userScope(session.partnerId),
+      JSON.stringify({ type: "partner_left" }),
+    );
+  }
   await leaveStrangerSession(user.id);
   return Response.json({ ok: true });
 }

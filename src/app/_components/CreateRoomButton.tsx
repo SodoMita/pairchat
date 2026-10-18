@@ -45,14 +45,14 @@ export function CreateRoomButton() {
         onClick={() => setShowPassphrase((v) => !v)}
         className="text-xs text-slate-400 hover:text-slate-200"
       >
-        {showPassphrase ? "Hide passphrase" : "Add passphrase (optional)"}
+        {showPassphrase ? t("passphraseHide") : t("passphraseAdd")}
       </button>
       {showPassphrase && (
         <input
           type="password"
           value={passphrase}
           onChange={(e) => setPassphrase(e.target.value)}
-          placeholder="Enter a passphrase"
+          placeholder={t("passphraseFieldPlaceholder")}
           maxLength={128}
           className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-fuchsia-400 focus:outline-none"
         />

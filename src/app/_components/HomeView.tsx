@@ -5,9 +5,8 @@ import { useI18n } from "./I18nProvider";
 import { TopBar } from "./TopBar";
 import { LanguagePicker } from "./LanguagePicker";
 import { CreateRoomButton } from "./CreateRoomButton";
-import { ServiceStatus } from "./ServiceStatus";
 import { ChatHistory } from "./ChatHistory";
-import { QueueStats } from "./QueueStats";
+import { LiveStatus } from "./LiveStatus";
 
 export function HomeView() {
   const { t } = useI18n();
@@ -21,7 +20,7 @@ export function HomeView() {
       {/* Right: main landing content */}
       <main className="flex min-h-screen flex-col">
         <header className="flex items-center justify-between px-6 py-6 sm:px-10">
-          <Link href="/" className="flex items-center gap-3">
+          <Link prefetch={false} href="/" className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-lg font-bold">
               ✦
             </div>
@@ -57,11 +56,8 @@ export function HomeView() {
         </div>
 
         <section className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center sm:px-10">
-          <div className="mb-3 flex justify-center">
-            <ServiceStatus />
-          </div>
           <div className="mb-5">
-            <QueueStats />
+            <LiveStatus />
           </div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300">
             {t("tagline")}
@@ -78,7 +74,7 @@ export function HomeView() {
           </p>
 
           <div className="mt-10 grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Link
+            <Link prefetch={false}
               href="/chat/stranger"
               className="group relative overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-left transition hover:border-indigo-400/60 hover:bg-slate-900"
             >
@@ -111,7 +107,7 @@ export function HomeView() {
                   <CreateRoomButton />
                 </div>
                 <div className="mt-4">
-                  <Link
+                  <Link prefetch={false}
                     href="/join"
                     className="text-sm font-medium text-fuchsia-300 hover:underline"
                   >
@@ -121,7 +117,7 @@ export function HomeView() {
               </div>
             </div>
 
-            <Link
+            <Link prefetch={false}
               href="/local"
               className="group relative overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-left transition hover:border-emerald-400/60 hover:bg-slate-900"
             >

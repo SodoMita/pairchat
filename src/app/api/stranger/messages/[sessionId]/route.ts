@@ -3,11 +3,7 @@ import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { matchmaking, messages } from "@/db/schema";
 import { getOrCreateUser } from "@/lib/session";
-import {
-  getActiveStrangerSession,
-  postMessage,
-  strangerScope,
-} from "@/lib/chat";
+import { postMessage, strangerScope } from "@/lib/chat";
 import { subscribe, publish } from "@/lib/bus";
 import { consume } from "@/lib/rateLimit";
 
@@ -201,32 +197,8 @@ export async function GET(req: NextRequest, ctx: RouteParams) {
         writeEvent(JSON.parse(payload), "message");
       });
 
-      // Partner disconnect detection: when the other side deletes their
-      // matchmaking row, surface a "partner_left" event.
-      let partnerGone = false;
-      const partnerCheck = setInterval(async () => {
-        try {
-          const session = await getActiveStrangerSession(user.id);
-          if (!session || session.sessionId !== sessionId) {
-            if (!partnerGone) {
-              partnerGone = true;
-              writeEvent({ type: "partner_left" }, "partner");
-            }
-            return;
-          }
-          // If partnerId went null, they left.
-          if (!session.partnerId && !partnerGone) {
-            partnerGone = true;
-            writeEvent({ type: "partner_left" }, "partner");
-          }
-        } catch {
-          // ignore
-        }
-      }, 3000);
-
       const cleanup = () => {
         clearInterval(heartbeat);
-        clearInterval(partnerCheck);
         unsub();
         try {
           controller.close();

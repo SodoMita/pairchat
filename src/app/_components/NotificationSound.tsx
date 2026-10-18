@@ -75,7 +75,7 @@ export function NotificationSound() {
     try {
       const n = new Notification(title, {
         body,
-        icon: "/favicon.ico",
+        icon: "/icon.svg",
         tag: "chatterbox-message",
         silent: true, // We play our own chime.
       });
@@ -98,7 +98,10 @@ export function NotificationSound() {
         body?: string;
       };
       playChime();
-      if (Notification.permission === "granted") {
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
         showNotification(
           d.senderName || "New message",
           d.body?.slice(0, 100) || "You received a new message.",

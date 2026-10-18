@@ -6,9 +6,22 @@ import {
   matchmaking,
   messages,
   rooms,
+  users,
   type Message,
   type Room,
 } from "@/db/schema";
+
+/** Per-user push channel (pairing, partner key, partner left). */
+export const userScope = (userId: string) => `user:${userId}`;
+
+export async function getUserName(userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ name: users.displayName })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return rows[0]?.name ?? null;
+}
 
 export type StrangerScope = `stranger:${string}`;
 export type RoomScope = `room:${string}`;

@@ -55,7 +55,7 @@ export function ChatHistory({ activeId }: Props) {
             {t("appName")}
           </span>
         </div>
-        <Link
+        <Link prefetch={false}
           href="/"
           className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
           title={t("backHome")}
@@ -65,7 +65,7 @@ export function ChatHistory({ activeId }: Props) {
       </div>
 
       <div className="px-3 pt-3">
-        <Link
+        <Link prefetch={false}
           href="/"
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:from-indigo-400 hover:to-fuchsia-400"
         >
@@ -155,7 +155,7 @@ function HistoryRow({
 
   return (
     <li className="group relative">
-      <Link
+      <Link prefetch={false}
         href={href}
         aria-current={active ? "page" : undefined}
         className={`block rounded-lg px-3 py-2 transition ${

@@ -1,418 +1,343 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ChatWindow } from "@/app/_components/ChatWindow";
+import { ChatShell } from "@/app/_components/ChatShell";
 import { useI18n } from "@/app/_components/I18nProvider";
 import { rememberRoom } from "@/app/local/_lib/rememberRooms";
-import { ChatShell } from "@/app/_components/ChatShell";
 import { useRoomCrypto } from "./useRoomCrypto";
-import { parseEnvelope } from "@/lib/crypto";
 
 type WireMessage = {
   id: string;
   scope: string;
   senderUserId: string;
   senderName: string;
-  /** Envelope JSON for real messages; localized text for systemFlag. */
+  /** AES-GCM envelope JSON — the server never sees plaintext. */
   body: string;
   createdAt: string;
   systemFlag: boolean;
 };
 
-type DisplayMessage = WireMessage & { body: string };
-
-type Props = {
-  userId: string | null;
-  userName: string | null;
-  roomId: string;
+type Me = { id: string; displayName: string };
+type RoomInfo = {
+  id: string;
   inviteCode: string;
-  isHost: boolean;
-  closed: boolean;
-  initialMessages: WireMessage[];
-  initialPartnerName: string | null;
-  shareUrl: string;
+  role: "host" | "guest";
+  hasPassphrase: boolean;
 };
 
-export function RoomChatClient({
-  userId: initialUserId,
-  userName: initialUserName,
-  roomId,
-  inviteCode,
-  isHost: initialIsHost,
-  closed,
-  initialMessages,
-  initialPartnerName,
-  shareUrl,
-}: Props) {
+type Access =
+  | { phase: "checking" }
+  | { phase: "passphrase"; wrong: boolean }
+  | { phase: "ready" }
+  | { phase: "closed" | "full" | "notfound" | "error" };
+
+/**
+ * Private room. A static shell: after load it makes exactly one request,
+ * `POST /api/rooms/[id]/enter`, which resolves the room (id or invite
+ * code), claims the guest seat, and returns who I am and who my partner
+ * is — replacing the old `/api/me` + `/join` + server-rendered page data.
+ * Messages (including history) then arrive over a single SSE stream.
+ */
+export function RoomChatClient() {
+  const params = useParams<{ id: string }>();
+  const ref = typeof params.id === "string" ? params.id : "";
   const router = useRouter();
   const { t } = useI18n();
-  const [selfUserId, setSelfUserId] = useState<string | null>(initialUserId);
-  const [selfName, setSelfName] = useState<string | null>(initialUserName);
-  const [isHost, setIsHost] = useState(initialIsHost);
-  const [roomAccess, setRoomAccess] = useState<"checking" | "ready" | "full" | "error" | "needs_passphrase">(
-    initialIsHost ? "ready" : "checking",
-  );
+
+  const [access, setAccess] = useState<Access>({ phase: "checking" });
+  const [me, setMe] = useState<Me | null>(null);
+  const [room, setRoom] = useState<RoomInfo | null>(null);
+  const [partnerName, setPartnerName] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState("");
-  const roomCrypto = useRoomCrypto(roomId, initialIsHost);
-  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [messages, setMessages] = useState<WireMessageDisplay[]>([]);
 
-  // Decrypt initial messages once the key is loaded.
-  useEffect(() => {
-    if (!roomCrypto.ready) return;
-    let cancelled = false;
-    (async () => {
-      const out: DisplayMessage[] = [];
-      for (const m of initialMessages) {
-        if (m.systemFlag) {
-          out.push({ ...m, body: t("roomClosedBody") });
-          continue;
-        }
-        const env = parseEnvelope(m.body);
-        if (!env) {
-          out.push({ ...m, body: "[unsupported message]" });
-          continue;
-        }
-        const plain = await roomCrypto.decrypt(m.body);
-        if (cancelled) return;
-        out.push({ ...m, body: plain ?? "[unable to decrypt]" });
-      }
-      if (!cancelled) setMessages(out);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCrypto.ready]);
+  const roomCrypto = useRoomCrypto(room?.id ?? null, room?.role === "host");
+  /** The id we already resolved, so a canonicalised URL doesn't re-enter. */
+  const resolvedRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (selfUserId) return;
-    let cancelled = false;
-    (async () => {
+  const enter = useCallback(
+    async (pass?: string) => {
+      setAccess({ phase: "checking" });
       try {
-        const meRes = await fetch("/api/me", { cache: "no-store" });
-        if (!meRes.ok) return;
-        const meData = (await meRes.json()) as {
-          user: { id: string; displayName: string } | null;
+        const res = await fetch(`/api/rooms/${encodeURIComponent(ref)}/enter`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pass ? { passphrase: pass } : {}),
+        });
+        if (res.status === 401) return setAccess({ phase: "passphrase", wrong: !!pass });
+        if (res.status === 404) return setAccess({ phase: "notfound" });
+        if (res.status === 410) return setAccess({ phase: "closed" });
+        if (res.status === 409) return setAccess({ phase: "full" });
+        if (!res.ok) return setAccess({ phase: "error" });
+
+        const data = (await res.json()) as {
+          me: Me;
+          room: RoomInfo;
+          partner: { displayName: string } | null;
         };
-        if (cancelled) return;
-        if (meData.user) {
-          setSelfUserId(meData.user.id);
-          setSelfName(meData.user.displayName);
+        resolvedRef.current = data.room.id;
+        setMe(data.me);
+        setRoom(data.room);
+        setPartnerName(data.partner?.displayName ?? null);
+        setAccess({ phase: "ready" });
+        // If the visitor typed an invite code, show the canonical URL while
+        // preserving the #key fragment (which never reaches the server).
+        if (data.room.id !== ref) {
+          window.history.replaceState(
+            null,
+            "",
+            `/room/${data.room.id}${window.location.hash}`,
+          );
         }
       } catch {
-        /* ignore */
+        setAccess({ phase: "error" });
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selfUserId]);
+    },
+    [ref],
+  );
 
   useEffect(() => {
-    if (!selfUserId) return;
+    if (!ref || resolvedRef.current === ref) return;
+    void enter();
+  }, [ref, enter]);
+
+  useEffect(() => {
+    if (!room) return;
     rememberRoom({
-      id: `room:${roomId}`,
+      id: `room:${room.id}`,
       kind: "room",
       title: t("roomTitle"),
       active: true,
       key: roomCrypto.keyB64 ?? undefined,
     });
-  }, [selfUserId, roomId, roomCrypto.keyB64, t]);
+  }, [room, roomCrypto.keyB64, t]);
 
-  // Guests must atomically claim the sole guest seat before SSE starts.
-  // Hosts are already authorized by the server-rendered room ownership.
+  // ---- Encrypted message stream (history + live) -------------------------
   useEffect(() => {
-    if (!selfUserId) return;
-    if (initialIsHost) {
-      setIsHost(true);
-      setRoomAccess("ready");
-      return;
-    }
-    let cancelled = false;
-    setRoomAccess("checking");
-    (async () => {
+    if (!room || !me || access.phase !== "ready" || !roomCrypto.ready) return;
+    const es = new EventSource(`/api/rooms/${room.id}/messages`);
+    es.addEventListener("message", (ev) => {
+      let payload: {
+        type: string;
+        message?: WireMessage;
+        displayName?: string;
+      };
       try {
-        const joinRes = await fetch(`/api/rooms/${roomId}/join`, {
-          method: "POST",
-        });
-        if (cancelled) return;
-        if (joinRes.ok) {
-          setIsHost(false);
-          setRoomAccess("ready");
-        } else if (joinRes.status === 401) {
-          // Passphrase required. Show prompt.
-          setRoomAccess("needs_passphrase");
-        } else if (joinRes.status === 409) {
-          setRoomAccess("full");
-        } else {
-          setRoomAccess("error");
-        }
+        payload = JSON.parse((ev as MessageEvent).data);
       } catch {
-        if (!cancelled) setRoomAccess("error");
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selfUserId, roomId, initialIsHost]);
-
-  const onCloseRoom = useCallback(async () => {
-    try {
-      await fetch(`/api/rooms/${roomId}`, { method: "DELETE" });
-    } catch {
-      /* ignore */
-    }
-    router.refresh();
-  }, [roomId, router]);
-
-  const onLeave = useCallback(() => {
-    router.push("/");
-  }, [router]);
-
-  // SSE for incoming encrypted messages; decrypt on arrival.
-  useEffect(() => {
-    if (closed || !roomCrypto.ready || roomAccess !== "ready") return;
-    let es: EventSource | null = null;
-    try {
-      es = new EventSource(`/api/rooms/${roomId}/messages`);
-    } catch {
-      return;
-    }
-    es.addEventListener("message", (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as {
-          type: string;
-          message?: WireMessage;
-        };
-        if (payload.type === "message" && payload.message) {
-          void (async () => {
-            const m = payload.message!;
-            if (m.systemFlag) {
-              setMessages((prev) =>
-                prev.some((p) => p.id === m.id)
-                  ? prev
-                  : [...prev, { ...m, body: t("roomClosedBody") }],
-              );
-              return;
-            }
-            const plain = await roomCrypto.decrypt(m.body);
-            setMessages((prev) =>
-              prev.some((p) => p.id === m.id)
-                ? prev
-                : [...prev, { ...m, body: plain ?? "[unable to decrypt]" }],
-            );
-          })();
+      if (payload.type === "guest_joined") {
+        setPartnerName(payload.displayName ?? t("partnerLabel"));
+      } else if (payload.type === "room_closed") {
+        setAccess({ phase: "closed" });
+      } else if (payload.type === "message" && payload.message) {
+        const m = payload.message;
+        if (m.senderUserId !== me.id) {
+          setPartnerName((prev) => prev ?? m.senderName);
         }
-      } catch {
-        /* ignore */
+        void (async () => {
+          const plain = m.systemFlag ? m.body : await roomCrypto.decrypt(m.body);
+          const display: WireMessageDisplay = {
+            id: m.id,
+            scope: m.scope,
+            senderUserId: m.senderUserId,
+            senderName: m.senderName,
+            body: plain ?? "[unable to decrypt]",
+            createdAt: m.createdAt,
+            systemFlag: m.systemFlag,
+          };
+          setMessages((prev) =>
+            prev.some((p) => p.id === display.id)
+              ? prev
+              : [...prev, display].sort((a, b) =>
+                  a.createdAt.localeCompare(b.createdAt),
+                ),
+          );
+        })();
       }
     });
-    return () => {
-      es?.close();
-    };
-  }, [closed, roomId, roomAccess, roomCrypto, t]);
+    return () => es.close();
+  }, [room, me, access.phase, roomCrypto, t]);
 
   const sendEncrypted = useCallback(
     async (plaintext: string) => {
-      if (!roomCrypto.ready || roomAccess !== "ready")
+      if (!room || !roomCrypto.ready || access.phase !== "ready") {
         throw new Error("Room not ready");
+      }
       const envelope = await roomCrypto.encrypt(plaintext);
-      const res = await fetch(`/api/rooms/${roomId}/messages`, {
+      const res = await fetch(`/api/rooms/${room.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ envelope }),
       });
       if (!res.ok) throw new Error("Send failed");
       const data = (await res.json()) as { message: WireMessage };
-      setMessages((prev) => {
-        if (prev.some((p) => p.id === data.message.id)) return prev;
-        return [...prev, { ...data.message, body: plaintext }];
-      });
+      setMessages((prev) =>
+        prev.some((p) => p.id === data.message.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: data.message.id,
+                scope: data.message.scope,
+                senderUserId: data.message.senderUserId,
+                senderName: data.message.senderName,
+                body: plaintext,
+                createdAt: data.message.createdAt,
+                systemFlag: false,
+              },
+            ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      );
     },
-    [roomCrypto, roomId, roomAccess],
+    [room, roomCrypto, access.phase],
   );
 
-  if (closed) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-rose-300">
-            {t("roomClosedTag")}
-          </p>
-          <h1 className="text-3xl font-bold">{t("roomClosedTitle")}</h1>
-          <p className="mt-3 text-sm text-slate-400">{t("roomClosedBody")}</p>
-          <div className="mt-8 flex justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="rounded-xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-400"
-            >
-              {t("backHomeBtn")}
-            </button>
-          </div>
-        </div>
-      </main>
+  const onCloseRoom = useCallback(async () => {
+    if (!room) return;
+    try {
+      await fetch(`/api/rooms/${room.id}`, { method: "DELETE" });
+    } catch {
+      /* ignore */
+    }
+    setAccess({ phase: "closed" });
+  }, [room]);
+
+  const onLeave = useCallback(() => router.push("/"), [router]);
+
+  // ---- Render ------------------------------------------------------------
+  const centered = (children: React.ReactNode) => (
+    <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
+      <div className="w-full max-w-md text-center">{children}</div>
+    </main>
+  );
+  const homeButton = (
+    <button
+      type="button"
+      onClick={() => router.push("/")}
+      className="mt-6 rounded-xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-400"
+    >
+      {t("backHomeBtn")}
+    </button>
+  );
+
+  if (access.phase === "closed") {
+    return centered(
+      <>
+        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-rose-300">
+          {t("roomClosedTag")}
+        </p>
+        <h1 className="text-3xl font-bold">{t("roomClosedTitle")}</h1>
+        <p className="mt-3 text-sm text-slate-400">{t("roomClosedBody")}</p>
+        {homeButton}
+      </>,
     );
   }
 
-  if (roomAccess === "needs_passphrase") {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-amber-300">
-            🔐 {t("passphraseRequiredTitle")}
-          </p>
-          <h1 className="text-2xl font-bold">{t("passphraseRequiredTitle")}</h1>
-          <p className="mt-3 text-sm text-slate-400">
-            {t("passphraseRequiredBody")}
-          </p>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setRoomAccess("checking");
-              try {
-                const res = await fetch(`/api/rooms/${roomId}/join`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ passphrase: passphrase.trim() }),
-                });
-                if (res.ok) {
-                  setRoomAccess("ready");
-                } else if (res.status === 401) {
-                  setRoomAccess("needs_passphrase");
-                } else if (res.status === 409) {
-                  setRoomAccess("full");
-                } else {
-                  setRoomAccess("error");
-                }
-              } catch {
-                setRoomAccess("error");
-              }
-            }}
-            className="mt-6 flex flex-col gap-3"
-          >
-            <input
-              type="password"
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              placeholder={t("passphrasePlaceholder")}
-              maxLength={128}
-              autoFocus
-              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!passphrase.trim()}
-              className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {t("passphraseSubmit")}
-            </button>
-          </form>
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="mt-4 text-xs text-slate-500 hover:text-slate-300"
-          >
-            {t("backHomeBtn")}
-          </button>
-        </div>
-      </main>
+  if (access.phase === "notfound" || access.phase === "full" || access.phase === "error") {
+    const full = access.phase === "full";
+    return centered(
+      <>
+        <h1 className="text-2xl font-bold">
+          {full ? t("roomFullTitle") : t("roomAccessErrorTitle")}
+        </h1>
+        <p className="mt-3 text-sm text-slate-400">
+          {full ? t("roomFullBody") : t("roomAccessErrorBody")}
+        </p>
+        {homeButton}
+      </>,
     );
   }
 
-  if (roomAccess === "full" || roomAccess === "error") {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-rose-300">
-            {roomAccess === "full" ? t("roomFullTitle") : t("roomAccessErrorTitle")}
-          </p>
-          <h1 className="text-2xl font-bold">
-            {roomAccess === "full" ? t("roomFullTitle") : t("roomAccessErrorTitle")}
-          </h1>
-          <p className="mt-3 text-sm text-slate-400">
-            {roomAccess === "full" ? t("roomFullBody") : t("roomAccessErrorBody")}
-          </p>
+  if (access.phase === "passphrase") {
+    return centered(
+      <>
+        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-amber-300">
+          🔐 {t("passphraseRequiredTitle")}
+        </p>
+        <h1 className="text-2xl font-bold">{t("passphraseRequiredTitle")}</h1>
+        <p className="mt-3 text-sm text-slate-400">{t("passphraseRequiredBody")}</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void enter(passphrase.trim());
+          }}
+          className="mt-6 flex flex-col gap-3"
+        >
+          <input
+            type="password"
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            placeholder={t("passphrasePlaceholder")}
+            maxLength={128}
+            autoFocus
+            className={`rounded-xl border bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none ${
+              access.wrong
+                ? "border-rose-500 focus:border-rose-400"
+                : "border-slate-700 focus:border-amber-400"
+            }`}
+          />
           <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="mt-6 rounded-xl bg-fuchsia-500 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-400"
+            type="submit"
+            disabled={!passphrase.trim()}
+            className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {t("backHomeBtn")}
+            {t("passphraseSubmit")}
           </button>
-        </div>
-      </main>
+        </form>
+      </>,
     );
   }
 
   if (roomCrypto.keyMissing) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="w-full max-w-md text-center">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-amber-300">
-            🔐 {t("roomKeyMissingTitle")}
-          </p>
-          <h1 className="text-2xl font-bold">{t("roomKeyMissingTitle")}</h1>
-          <p className="mt-3 text-sm text-slate-400">{t("roomKeyMissingBody")}</p>
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="mt-6 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700"
-          >
-            {t("backHomeBtn")}
-          </button>
-        </div>
-      </main>
+    return centered(
+      <>
+        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-amber-300">
+          🔐 {t("roomKeyMissingTitle")}
+        </p>
+        <h1 className="text-2xl font-bold">{t("roomKeyMissingTitle")}</h1>
+        <p className="mt-3 text-sm text-slate-400">{t("roomKeyMissingBody")}</p>
+        {homeButton}
+      </>,
     );
   }
 
-  if (!selfUserId || !selfName || !roomCrypto.ready || roomAccess !== "ready") {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <div className="text-center">
-          <p className="text-sm text-slate-400">{t("loading")}</p>
-        </div>
-      </main>
-    );
+  if (!room || !me || !roomCrypto.ready) {
+    return centered(<p className="text-sm text-slate-400">{t("loading")}</p>);
   }
 
-  const status = initialPartnerName
+  const isHost = room.role === "host";
+  const status = partnerName
     ? { kind: "ok" as const, text: t("statusConnected") }
     : { kind: "warn" as const, text: t("statusWaiting") };
-
-  const title = initialPartnerName
-    ? t("chatTitleWith", { name: initialPartnerName })
+  const title = partnerName
+    ? t("chatTitleWith", { name: partnerName })
     : t("roomTitle");
-
-  // Append the room key to the share URL when the host shares. The
-  // server never sees it because it's in the fragment. The key is
-  // produced by useRoomCrypto after mount and rewriteState'd into the
-  // URL hash.
-  const shareUrlWithKey = roomCrypto.keyB64
-    ? `${shareUrl}#${encodeURIComponent(roomCrypto.keyB64)}`
-    : shareUrl;
+  // The key rides in the URL fragment, which browsers never send to a server.
+  const shareUrl = `${window.location.origin}/room/${room.id}${
+    roomCrypto.keyB64 ? `#${encodeURIComponent(roomCrypto.keyB64)}` : ""
+  }`;
 
   return (
-    <ChatShell activeId={`room:${roomId}`}>
+    <ChatShell activeId={`room:${room.id}`}>
       <ChatWindow
         initialMessages={messages}
         externalMessages={messages}
         manageSSE={false}
-        selfUserId={selfUserId}
-        selfName={selfName}
-        apiBase={`/api/rooms/${roomId}/messages`}
-        historyId={`room:${roomId}`}
-        partnerName={initialPartnerName ?? undefined}
+        selfUserId={me.id}
+        selfName={me.displayName}
+        apiBase={`/api/rooms/${room.id}/messages`}
+        historyId={`room:${room.id}`}
+        partnerName={partnerName ?? undefined}
         partnerLabel={t("partnerLabel")}
         title={title}
-        subtitle={t("inviteCodeLabel", { code: inviteCode })}
-        shareUrl={shareUrlWithKey}
+        subtitle={t("inviteCodeLabel", { code: room.inviteCode })}
+        shareUrl={shareUrl}
         status={status}
         placeholder={
-          initialPartnerName
-            ? t("inputPlaceholderConnected")
-            : t("inputPlaceholderWaiting")
+          partnerName ? t("inputPlaceholderConnected") : t("inputPlaceholderWaiting")
         }
         onCloseRoom={isHost ? onCloseRoom : undefined}
         onLeave={!isHost ? onLeave : undefined}
@@ -422,3 +347,5 @@ export function RoomChatClient({
     </ChatShell>
   );
 }
+
+type WireMessageDisplay = Omit<WireMessage, "body"> & { body: string };

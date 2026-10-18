@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChatWindow } from "@/app/_components/ChatWindow";
+import { ChatShell } from "@/app/_components/ChatShell";
 import { useI18n } from "@/app/_components/I18nProvider";
 import { rememberRoom } from "@/app/local/_lib/rememberRooms";
-import { ChatShell } from "@/app/_components/ChatShell";
 import { useStrangerCrypto } from "./useStrangerCrypto";
 
 type WireMessage = {
@@ -13,6 +13,7 @@ type WireMessage = {
   scope: string;
   senderUserId: string;
   senderName: string;
+  /** AES-GCM envelope JSON — the server never sees plaintext. */
   body: string;
   senderPubKey: string | null;
   createdAt: string;
@@ -24,349 +25,292 @@ type DisplayMessage = {
   scope: string;
   senderUserId: string;
   senderName: string;
-  /** Plaintext — already decrypted by the client. */
+  /** Plaintext, decrypted in this browser. */
   body: string;
   createdAt: string;
   systemFlag: boolean;
 };
 
-type StrangerChatClientProps = {
-  userId: string | null;
-  userName: string | null;
-  initialSession: { sessionId: string; partnerId: string | null } | null;
-  initialMessages: WireMessage[];
-  initialPartnerName: string | null;
+type Me = { id: string; displayName: string };
+type Session = { sessionId: string; partnerName: string | null };
+type PairedPayload = {
+  sessionId: string;
+  partnerName?: string | null;
+  partnerLeft?: boolean;
+  partnerKey?: string | null;
 };
 
-export function StrangerChatClient({
-  userId: initialUserIdProp,
-  userName: initialUserNameProp,
-  initialSession,
-  initialMessages,
-  initialPartnerName,
-}: StrangerChatClientProps) {
+const BASE_BACKOFF_MS = 2_000;
+const MAX_BACKOFF_MS = 30_000;
+
+/**
+ * Stranger roulette. The page is a static shell; everything dynamic
+ * arrives over two connections to our own server:
+ *
+ *   POST /api/stranger/start   once per match: join the queue, learn who I am
+ *   GET  /api/stranger/events  one SSE stream: paired / partner key / left
+ *
+ * plus the per-session message stream once keys are exchanged. There is no
+ * polling and no `/api/me` call.
+ */
+export function StrangerChatClient() {
   const router = useRouter();
   const { t } = useI18n();
-  const [selfUserId, setSelfUserId] = useState<string | null>(initialUserIdProp);
-  const [selfName, setSelfName] = useState<string | null>(initialUserNameProp);
-  const [session, setSession] = useState(initialSession);
-  const [partnerName, setPartnerName] = useState<string | null>(initialPartnerName);
+
+  const [me, setMe] = useState<Me | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [partnerKeyB64, setPartnerKeyB64] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
-  const startedRef = useRef(false);
-
-  // Crypto state. The hook generates an X25519 identity keypair on
-  // mount and waits for the partner's public key.
-  const crypto = useStrangerCrypto(session?.sessionId ?? null, selfUserId);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
-  const partnerPubKeyByUserRef = useRef<Map<string, string>>(new Map());
+  const [netError, setNetError] = useState(false);
+  /** Bumped to (re)start matching: "Next stranger" and error retries. */
+  const [attempt, setAttempt] = useState(0);
+  const failuresRef = useRef(0);
 
-  // Decrypt the initial messages once both my identity key and the
-  // partner's static public key are available. For each message, the
-  // sender's static pub key is `crypto.partnerKey` (they're the only
-  // other participant); `m.senderPubKey` is the per-message ephemeral
-  // public key sent alongside the ciphertext.
-  useEffect(() => {
-    const identity = crypto.identity;
-    const partnerKey = crypto.partnerKey;
-    if (!identity || !crypto.partnerKeyReady || !partnerKey) return;
-    let cancelled = false;
-    (async () => {
-      const out: DisplayMessage[] = [];
-      const senderStaticPub = b64u(partnerKey);
-      for (const m of initialMessages) {
-        if (m.systemFlag) {
-          out.push(decryptDisplay(m, t("partnerLeftMsg", { label: partnerLabelFallback(m.senderName) })));
-          continue;
-        }
-        if (!m.senderPubKey) {
-          out.push({ ...m, body: "[unsupported message]" });
-          continue;
-        }
-        const staticPub =
-          m.senderUserId === selfUserId
-            ? b64u(identity.publicKey)
-            : senderStaticPub;
-        const plain = await crypto.decrypt(m.body, staticPub, m.senderPubKey);
-        if (cancelled) return;
-        out.push({ ...m, body: plain ?? "[unable to decrypt]" });
-      }
-      if (!cancelled) setMessages(out);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // intentional: we only run on identity/partner keypair ready, and
-    // initialMessages is a one-shot input from the server.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crypto.identity, crypto.partnerKeyReady]);
-
-  // Establish identity on mount if missing.
-  useEffect(() => {
-    if (selfUserId && selfName) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/me", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as { user: { id: string; displayName: string } | null };
-        if (cancelled) return;
-        if (data.user) {
-          setSelfUserId(data.user.id);
-          setSelfName(data.user.displayName);
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selfUserId, selfName]);
-
-  const startMatchmaking = useCallback(async () => {
-    try {
-      const res = await fetch("/api/stranger/start", { method: "POST" });
-      if (!res.ok) throw new Error("start failed");
-      const data = (await res.json()) as
-        | { state: "queued" }
-        | {
-            state: "paired";
-            sessionId: string;
-            partnerId: string | null;
-            partnerIdentityPubKey: string | null;
-          };
-      if (data.state === "paired") {
-        setSession({ sessionId: data.sessionId, partnerId: data.partnerId });
-        rememberRoom({
-          id: `stranger:${data.sessionId}`,
-          kind: "stranger",
-          title: t("chatTitleDefault"),
-          active: true,
-        });
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [t]);
-
-  useEffect(() => {
-    if (session) return;
-    if (startedRef.current) return;
-    startedRef.current = true;
-    void startMatchmaking();
-  }, [session, startMatchmaking]);
-
-  useEffect(() => {
-    if (session) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/stranger/start", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as
-          | { state: "queued" }
-          | {
-              state: "paired";
-              sessionId: string;
-              partnerId: string | null;
-              partnerIdentityPubKey: string | null;
-            };
-        if (data.state === "paired") {
-          setSession({ sessionId: data.sessionId, partnerId: data.partnerId });
-          rememberRoom({
-            id: `stranger:${data.sessionId}`,
-            kind: "stranger",
-            title: t("chatTitleDefault"),
-            active: true,
-          });
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [session, t]);
-
-  // Append a received SSE message after decrypting it.
-  const appendReceived = useCallback(
-    async (m: WireMessage) => {
-      if (m.systemFlag) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            ...m,
-            body: t("partnerLeftMsg", { label: partnerLabelFallback(m.senderName) }),
-          },
-        ]);
-        return;
-      }
-      if (!m.senderPubKey) return; // can't decrypt, drop
-      partnerPubKeyByUserRef.current.set(m.senderUserId, m.senderPubKey);
-      // If we've already established the partner's static pub key from
-      // the /api/stranger/partner-key endpoint, prefer that — but
-      // since the partner-key hook only knows the static key, and the
-      // senderPubKey on a message is the EPHEMERAL public key, we need
-      // both. Our useStrangerCrypto.decrypt() takes (senderStaticPub,
-      // senderEphemeralPub) so we need a way to know the static key.
-      //
-      // For a stranger 1:1 chat the only two participants are me and
-      // the partner. The sender's STATIC pub key is whichever of those
-      // two identities isn't me: if the sender is me, it's
-      // crypto.identity.publicKey; otherwise it's crypto.partnerKey.
-      // `m.senderPubKey` is the per-message EPHEMERAL public key sent
-      // alongside the ciphertext.
-      let plain: string | null = null;
-      if (m.senderUserId === selfUserId && crypto.identity) {
-        plain = await crypto.decrypt(
-          m.body,
-          b64u(crypto.identity.publicKey),
-          m.senderPubKey,
-        );
-      } else if (crypto.partnerKey) {
-        plain = await crypto.decrypt(
-          m.body,
-          b64u(crypto.partnerKey),
-          m.senderPubKey,
-        );
-      }
-      setMessages((prev) => {
-        if (prev.some((p) => p.id === m.id)) return prev;
-        return [
-          ...prev,
-          {
-            ...m,
-            body: plain ?? "[unable to decrypt]",
-          },
-        ];
-      });
-    },
-    [crypto, selfUserId, t],
+  const e2ee = useStrangerCrypto(
+    session?.sessionId ?? null,
+    me?.id ?? null,
+    partnerKeyB64,
   );
 
-  // Wire SSE inbound only after both keypairs are ready; this ensures
-  // the replay snapshot cannot be rendered as raw ciphertext.
+  // ---- Matching + event stream ------------------------------------------
   useEffect(() => {
-    if (!session || !crypto.identity || !crypto.partnerKeyReady) return;
-    const sid = session.sessionId;
-    let es: EventSource | null = null;
-    try {
-      es = new EventSource(`/api/stranger/messages/${sid}`);
-    } catch {
-      return;
-    }
-    es.addEventListener("message", (ev: MessageEvent) => {
+    let cancelled = false;
+    let events: EventSource | null = null;
+    setSession(null);
+    setPartnerKeyB64(null);
+    setEnded(false);
+    setMessages([]);
+    setNetError(false);
+
+    const applyPaired = (p: PairedPayload) => {
+      // Idempotent: the same session may be reported by the POST response,
+      // the stream's `state` event, and a `paired` event.
+      setSession((prev) =>
+        prev?.sessionId === p.sessionId
+          ? prev
+          : { sessionId: p.sessionId, partnerName: p.partnerName ?? null },
+      );
+      if (p.partnerLeft) setEnded(true);
+      // Keys only ever move forward: never clear one on a stale snapshot.
+      if (p.partnerKey) setPartnerKeyB64(p.partnerKey);
+    };
+
+    (async () => {
       try {
-        const payload = JSON.parse(ev.data) as {
+        const res = await fetch("/api/stranger/start", { method: "POST" });
+        if (!res.ok) throw new Error("start failed");
+        const data = (await res.json()) as {
+          state: "queued" | "paired";
+          me: Me;
+        } & Partial<PairedPayload>;
+        if (cancelled) return;
+        failuresRef.current = 0;
+        setMe(data.me);
+        if (data.state === "paired" && data.sessionId) {
+          applyPaired(data as PairedPayload);
+        }
+      } catch {
+        if (!cancelled) setNetError(true);
+        return;
+      }
+
+      // Opened only after /start resolved so a first-time visitor's account
+      // exists before the stream authenticates (no duplicate-user race).
+      events = new EventSource("/api/stranger/events");
+      const parse = (ev: MessageEvent) => JSON.parse(ev.data);
+      events.addEventListener("state", (ev) => {
+        const d = parse(ev as MessageEvent);
+        if (d.state === "paired") applyPaired(d);
+      });
+      events.addEventListener("paired", (ev) => applyPaired(parse(ev as MessageEvent)));
+      events.addEventListener("partner_key", (ev) => {
+        const d = parse(ev as MessageEvent);
+        if (typeof d.key === "string") setPartnerKeyB64(d.key);
+      });
+      events.addEventListener("partner_left", () => setEnded(true));
+    })();
+
+    return () => {
+      cancelled = true;
+      events?.close();
+    };
+  }, [attempt]);
+
+  // Retry with exponential backoff (auto-retrying at a fixed short interval
+  // against a down server would only add traffic).
+  useEffect(() => {
+    if (!netError) return;
+    failuresRef.current += 1;
+    const delay = Math.min(
+      MAX_BACKOFF_MS,
+      BASE_BACKOFF_MS * 2 ** (failuresRef.current - 1),
+    );
+    const id = setTimeout(() => setAttempt((a) => a + 1), delay);
+    return () => clearTimeout(id);
+  }, [netError]);
+
+  useEffect(() => {
+    if (!session) return;
+    rememberRoom({
+      id: `stranger:${session.sessionId}`,
+      kind: "stranger",
+      title: t("chatTitleDefault"),
+      active: true,
+    });
+  }, [session, t]);
+
+  // ---- Encrypted message stream -----------------------------------------
+  const ingest = useCallback(
+    async (m: WireMessage) => {
+      if (!me || !e2ee.identity || !e2ee.partnerKey || !m.senderPubKey) return;
+      // The sender's static key is mine or my partner's; 1:1 chat.
+      const senderStatic =
+        m.senderUserId === me.id ? e2ee.identity.publicKey : e2ee.partnerKey;
+      const plain = await e2ee.decrypt(m.body, senderStatic, m.senderPubKey);
+      const display: DisplayMessage = {
+        id: m.id,
+        scope: m.scope,
+        senderUserId: m.senderUserId,
+        senderName: m.senderName,
+        body: plain ?? "[unable to decrypt]",
+        createdAt: m.createdAt,
+        systemFlag: m.systemFlag,
+      };
+      setMessages((prev) =>
+        prev.some((p) => p.id === display.id)
+          ? prev
+          : [...prev, display].sort((a, b) =>
+              a.createdAt.localeCompare(b.createdAt),
+            ),
+      );
+    },
+    [me, e2ee],
+  );
+
+  // Opened only once both keys exist, so the replayed history can never be
+  // shown as raw ciphertext.
+  useEffect(() => {
+    if (!session || !me || !e2ee.identity || !e2ee.partnerKey) return;
+    const es = new EventSource(`/api/stranger/messages/${session.sessionId}`);
+    es.addEventListener("message", (ev) => {
+      try {
+        const payload = JSON.parse((ev as MessageEvent).data) as {
           type: string;
           message?: WireMessage;
         };
         if (payload.type === "message" && payload.message) {
-          void appendReceived(payload.message);
+          void ingest(payload.message);
         }
       } catch {
-        /* ignore */
+        /* ignore malformed */
       }
     });
-    es.addEventListener("partner", (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as { type: string };
-        if (payload.type === "partner_left") {
-          setMessages((prev) => [
+    return () => es.close();
+  }, [session, me, e2ee.identity, e2ee.partnerKey, ingest]);
+
+  useEffect(() => {
+    if (!ended || !session) return;
+    const id = `sys-left-${session.sessionId}`;
+    setMessages((prev) =>
+      prev.some((p) => p.id === id)
+        ? prev
+        : [
             ...prev,
             {
-              id: `sys-partner-${Date.now()}`,
-              scope: `stranger:${sid}`,
+              id,
+              scope: `stranger:${session.sessionId}`,
               senderUserId: "system",
               senderName: "System",
-              senderPubKey: null,
-              body: t("partnerLeftMsg", {
-                label: t("partnerLabel"),
-              }),
+              body: t("partnerLeftMsg", { label: t("partnerLabel") }),
               createdAt: new Date().toISOString(),
               systemFlag: true,
             },
-          ]);
-          setEnded(true);
-        }
-      } catch {
-        /* ignore */
-      }
-    });
-    return () => {
-      es?.close();
-    };
-  }, [session, appendReceived, t]);
+          ],
+    );
+  }, [ended, session, t]);
 
-  // Custom send: encrypt with the hook, POST envelope + ephemeral pub key.
   const sendEncrypted = useCallback(
     async (plaintext: string) => {
-      if (!crypto.partnerKeyReady || !crypto.identity || !session) {
+      if (!session || !me || !e2ee.identity || !e2ee.partnerKey) {
         throw new Error("Crypto not ready");
       }
-      const sealed = await crypto.encrypt(plaintext);
-      const res = await fetch(
-        `/api/stranger/messages/${session.sessionId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            envelope: sealed.envelope,
-            ephemeralPubKey: sealed.ephemeralPubKey,
-          }),
-        },
-      );
+      const sealed = await e2ee.encrypt(plaintext);
+      const res = await fetch(`/api/stranger/messages/${session.sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          envelope: sealed.envelope,
+          ephemeralPubKey: sealed.ephemeralPubKey,
+        }),
+      });
       if (!res.ok) throw new Error("Send failed");
       const data = (await res.json()) as { message: WireMessage };
-      // Append optimistically with the plaintext we just sent. SSE will
-      // also deliver it; dedup by id.
-      setMessages((prev) => {
-        if (prev.some((p) => p.id === data.message.id)) return prev;
-        return [
-          ...prev,
-          {
-            ...data.message,
-            body: plaintext,
-          },
-        ];
-      });
+      // Show my own message immediately (I already have the plaintext);
+      // the stream's copy is de-duplicated by id.
+      setMessages((prev) =>
+        prev.some((p) => p.id === data.message.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: data.message.id,
+                scope: data.message.scope,
+                senderUserId: data.message.senderUserId,
+                senderName: data.message.senderName,
+                body: plaintext,
+                createdAt: data.message.createdAt,
+                systemFlag: false,
+              },
+            ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      );
     },
-    [crypto, session],
+    [session, me, e2ee],
   );
 
+  // Next: the server must forget the old pairing before we queue again, so
+  // this one waits for the DELETE.
   const onNext = useCallback(async () => {
     try {
       await fetch("/api/stranger/start", { method: "DELETE" });
     } catch {
       /* ignore */
     }
-    setSession(null);
-    setPartnerName(null);
-    setMessages([]);
-    setEnded(false);
-    startedRef.current = false;
-    startedRef.current = true;
-    void startMatchmaking();
-  }, [startMatchmaking]);
+    setAttempt((a) => a + 1);
+  }, []);
 
-  const onLeave = useCallback(async () => {
-    try {
-      await fetch("/api/stranger/start", { method: "DELETE" });
-    } catch {
-      /* ignore */
-    }
+  // Leave is local-first: navigate now, tell the server in the background.
+  const onLeave = useCallback(() => {
+    void fetch("/api/stranger/start", { method: "DELETE", keepalive: true }).catch(
+      () => {},
+    );
     router.push("/");
   }, [router]);
 
-  // Pre-session: searching UI.
-  if (!session) {
+  // ---- Render ------------------------------------------------------------
+  if (netError) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-2xl font-bold">{t("serviceUnavailable")}</h1>
+          <p className="mt-6 text-xs text-slate-500">
+            <a href="/" className="hover:underline">
+              {t("backHome")}
+            </a>
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session || !me) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
         <div className="w-full max-w-md text-center">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-fuchsia-300">
             {t("searchingTag")}
           </p>
-          <h1 className="text-3xl font-bold sm:text-4xl">
-            {t("searchingTitle")}
-          </h1>
+          <h1 className="text-3xl font-bold sm:text-4xl">{t("searchingTitle")}</h1>
           <p className="mt-3 text-sm text-slate-400">{t("searchingBody")}</p>
           <div className="mx-auto mt-8 flex max-w-sm items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm text-slate-300 ring-1 ring-slate-800">
             <span className="relative flex h-2.5 w-2.5">
@@ -385,16 +329,7 @@ export function StrangerChatClient({
     );
   }
 
-  if (!selfUserId || !selfName) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
-        <p className="text-sm text-slate-400">{t("loading")}</p>
-      </main>
-    );
-  }
-
-  // Waiting for partner's static pub key before we can encrypt.
-  if (!crypto.partnerKeyReady || !crypto.identity) {
+  if (!e2ee.identity || !e2ee.partnerKeyReady) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-slate-100">
         <div className="w-full max-w-md text-center">
@@ -404,9 +339,7 @@ export function StrangerChatClient({
           <h1 className="text-3xl font-bold sm:text-4xl">
             {t("cryptoHandshakeTitle")}
           </h1>
-          <p className="mt-3 text-sm text-slate-400">
-            {t("cryptoHandshakeBody")}
-          </p>
+          <p className="mt-3 text-sm text-slate-400">{t("cryptoHandshakeBody")}</p>
           <div className="mx-auto mt-8 flex max-w-sm items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm text-slate-300 ring-1 ring-slate-800">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -419,8 +352,8 @@ export function StrangerChatClient({
     );
   }
 
-  const title = partnerName
-    ? t("chatTitleWith", { name: partnerName })
+  const title = session.partnerName
+    ? t("chatTitleWith", { name: session.partnerName })
     : t("chatTitleDefault");
   const status = ended
     ? { kind: "warn" as const, text: t("statusPartnerLeft") }
@@ -432,16 +365,15 @@ export function StrangerChatClient({
         initialMessages={messages}
         externalMessages={messages}
         manageSSE={false}
-        selfUserId={selfUserId}
-        selfName={selfName}
+        selfUserId={me.id}
+        selfName={me.displayName}
         apiBase={`/api/stranger/messages/${session.sessionId}`}
         historyId={`stranger:${session.sessionId}`}
-        partnerName={partnerName ?? undefined}
+        partnerName={session.partnerName ?? undefined}
         partnerLabel={t("partnerLabel")}
         title={title}
         subtitle={t("chatSubtitle")}
         status={status}
-        onEnded={() => setEnded(true)}
         onNext={onNext}
         onLeave={onLeave}
         disabled={ended}
@@ -451,18 +383,4 @@ export function StrangerChatClient({
       />
     </ChatShell>
   );
-}
-
-function decryptDisplay(m: WireMessage, fallbackBody: string): DisplayMessage {
-  return { ...m, body: fallbackBody };
-}
-
-function partnerLabelFallback(_name: string): string {
-  return "Stranger";
-}
-
-function b64u(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 1) s += String.fromCharCode(bytes[i]);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

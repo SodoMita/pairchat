@@ -1,21 +1,8 @@
-import { redirect } from "next/navigation";
-import { findRoomByInviteCode } from "@/lib/chat";
 import { JoinView } from "./JoinView";
 
-export const dynamic = "force-dynamic";
-
-type SearchParams = { code?: string };
-
-export default async function JoinPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const params = await searchParams;
-  const code = params.code?.trim();
-  if (code) {
-    const room = await findRoomByInviteCode(code);
-    if (room) redirect(`/room/${room.id}`);
-  }
+// Static. Invite codes are resolved by the room page itself (POST /enter
+// accepts either a room id or an invite code), so this page needs no
+// per-request lookup or redirect.
+export default function JoinPage() {
   return <JoinView />;
 }

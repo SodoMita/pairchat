@@ -20,7 +20,6 @@ import {
 } from "@/lib/i18n/messages";
 
 const LOCALE_STORAGE_KEY = "chatterbox.locale";
-const LOCALE_COOKIE = "roulette_locale";
 
 type Direction = "ltr" | "rtl";
 
@@ -56,30 +55,24 @@ function getDirForLocale(code: LocaleCode): Direction {
   return loc && "rtl" in loc && loc.rtl ? "rtl" : "ltr";
 }
 
-export function I18nProvider({
-  children,
-  initialLocale,
-}: {
-  children: React.ReactNode;
-  initialLocale?: LocaleCode;
-}) {
-  const [locale, setLocaleState] = useState<LocaleCode>(
-    initialLocale ?? DEFAULT_LOCALE,
-  );
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  // Pages are statically rendered in the default locale; the visitor's
+  // locale is detected on the client (no cookie, so nothing here forces
+  // per-request server rendering and no extra cookie rides on every request).
+  const [locale, setLocaleState] = useState<LocaleCode>(DEFAULT_LOCALE);
+  const [ready, setReady] = useState(false);
 
-  // Hydrate from localStorage / navigator on the client.
   useEffect(() => {
-    if (initialLocale) return;
-    const detected = readInitialLocale();
-    if (detected !== locale) setLocaleState(detected);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setLocaleState(readInitialLocale());
+    setReady(true);
   }, []);
 
   const dir = getDirForLocale(locale);
 
-  // Reflect locale in <html lang/dir> and persist to storage.
+  // Reflect locale in <html lang/dir> and persist the choice. Gated on
+  // `ready` so the placeholder default never overwrites a saved locale.
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    if (!ready || typeof document === "undefined") return;
     document.documentElement.lang = locale;
     document.documentElement.dir = dir;
     try {
@@ -87,9 +80,9 @@ export function I18nProvider({
     } catch {
       // ignore
     }
-    // Non-HttpOnly cookie so server components can read it (for SSR).
-    document.cookie = `${LOCALE_COOKIE}=${encodeURIComponent(locale)}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-  }, [locale, dir]);
+    // Reveal the page (see the pre-paint guard in the root layout).
+    document.documentElement.removeAttribute("data-i18n-pending");
+  }, [ready, locale, dir]);
 
   const setLocale = useCallback((code: LocaleCode) => {
     setLocaleState(code);
