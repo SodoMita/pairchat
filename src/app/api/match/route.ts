@@ -1,10 +1,23 @@
 import { db } from "@/db";
-import { chatParticipants, chatRooms } from "@/db/schema";
-import { createRoomId, isValidClientId, isValidEcdhPublicKey, isValidEcdsaPublicKey } from "@/lib/chat";
+import { abuseSignals, chatParticipants, chatReports, chatRooms } from "@/db/schema";
+import {
+  createRoomId,
+  isValidAbuseSession,
+  isValidClientId,
+  isValidEcdhPublicKey,
+  isValidEcdsaPublicKey,
+} from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
 import { allowRequest } from "@/lib/rate-limit";
-import { bearerCredential, isTrustedJsonMutation, readLimitedJson, requestClientAddress } from "@/lib/request-security";
+import {
+  abuseSessionCredential,
+  bearerCredential,
+  isTrustedJsonMutation,
+  readLimitedJson,
+  requestClientAddress,
+} from "@/lib/request-security";
 import { hashAccessCredential } from "@/lib/server-credentials";
+import { issueAdmissionChallenge, verifyAdmissionChallenge } from "@/lib/admission-challenge";
 import {
   and,
   asc,
@@ -29,14 +42,38 @@ export async function POST(request: NextRequest) {
   }
   const body = await readLimitedJson(request);
   const clientId = bearerCredential(request);
+  const abuseSession = abuseSessionCredential(request);
   const publicKey = body?.publicKey;
   const signingKey = body?.signingKey;
 
-  if (!isValidClientId(clientId) || !isValidEcdhPublicKey(publicKey) || !isValidEcdsaPublicKey(signingKey)) {
+  if (
+    !isValidClientId(clientId) ||
+    !isValidAbuseSession(abuseSession) ||
+    !isValidEcdhPublicKey(publicKey) ||
+    !isValidEcdsaPublicKey(signingKey)
+  ) {
     return NextResponse.json({ error: "Invalid encrypted chat identity." }, { status: 400 });
   }
 
   const accessHash = hashAccessCredential(clientId);
+  const abuseSessionHash = hashAccessCredential(abuseSession);
+
+  // Normal use gets a quiet budget; bursts must solve a local proof-of-work
+  // challenge issued and verified by this server. No third-party scripts.
+  const withinQuietBudget = allowRequest(`match-quiet:${abuseSessionHash}`, 3, 10 * 60_000);
+  if (!withinQuietBudget) {
+    const challengeSolved = verifyAdmissionChallenge(body?.challenge, abuseSessionHash);
+    if (!challengeSolved) {
+      return NextResponse.json(
+        {
+          error: "Please complete the admission check.",
+          challenge: issueAdmissionChallenge(abuseSessionHash),
+        },
+        { status: 428 },
+      );
+    }
+  }
+
   const roomId = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(7402181)`);
     await tx.execute(sql`
@@ -51,6 +88,8 @@ export async function POST(request: NextRequest) {
       where (status = 'ended' and coalesce(ended_at, updated_at) < now() - interval '24 hours')
         or updated_at < now() - interval '7 days'
     `);
+    await tx.delete(chatReports).where(sql`${chatReports.expiresAt} <= now()`);
+    await tx.delete(abuseSignals).where(sql`${abuseSignals.expiresAt} <= now()`);
 
     const [existing] = await tx
       .select({
@@ -95,6 +134,59 @@ export async function POST(request: NextRequest) {
       return existing.roomId;
     }
 
+    const now = new Date();
+    const [signal] = await tx
+      .select({ cooldownUntil: abuseSignals.cooldownUntil })
+      .from(abuseSignals)
+      .where(eq(abuseSignals.sessionHash, abuseSessionHash))
+      .limit(1);
+    if (signal?.cooldownUntil && signal.cooldownUntil > now) {
+      return "session-cooldown" as const;
+    }
+
+    const [sessionWaiting] = await tx
+      .select({ roomId: chatRooms.id })
+      .from(chatParticipants)
+      .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
+      .where(
+        and(
+          eq(chatParticipants.abuseSessionHash, abuseSessionHash),
+          eq(chatRooms.kind, "random"),
+          eq(chatRooms.status, "waiting"),
+          isNull(chatParticipants.leftAt),
+        ),
+      )
+      .limit(1);
+    if (sessionWaiting) return "session-waiting" as const;
+
+    const activeRooms = await tx
+      .select({ roomId: chatRooms.id })
+      .from(chatParticipants)
+      .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
+      .where(
+        and(
+          eq(chatParticipants.abuseSessionHash, abuseSessionHash),
+          eq(chatRooms.kind, "random"),
+          eq(chatRooms.status, "active"),
+          isNull(chatParticipants.leftAt),
+        ),
+      )
+      .limit(4);
+    if (activeRooms.length >= 3) return "session-limit" as const;
+
+    const [{ recentContacts }] = await tx
+      .select({ recentContacts: sql<number>`count(*)::int` })
+      .from(chatParticipants)
+      .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
+      .where(
+        and(
+          eq(chatParticipants.abuseSessionHash, abuseSessionHash),
+          eq(chatRooms.kind, "random"),
+          sql`${chatParticipants.joinedAt} > now() - interval '1 hour'`,
+        ),
+      );
+    if (recentContacts >= 20) return "contact-budget" as const;
+
     const [waiting] = await tx
       .select({ roomId: chatRooms.id })
       .from(chatRooms)
@@ -122,6 +214,7 @@ export async function POST(request: NextRequest) {
       await tx.insert(chatParticipants).values({
         roomId: waiting.roomId,
         clientId: accessHash,
+        abuseSessionHash,
         seat: 2,
         publicKey,
         signingKey,
@@ -138,6 +231,7 @@ export async function POST(request: NextRequest) {
     await tx.insert(chatParticipants).values({
       roomId: id,
       clientId: accessHash,
+      abuseSessionHash,
       seat: 1,
       publicKey,
       signingKey,
@@ -149,6 +243,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "Signing key does not match this participant." },
       { status: 409 },
+    );
+  }
+  if (roomId === "session-cooldown") {
+    return NextResponse.json(
+      { error: "Matching is temporarily paused for this browser." },
+      { status: 429 },
+    );
+  }
+  if (roomId === "contact-budget") {
+    return NextResponse.json(
+      { error: "This browser has met new strangers too quickly. Please try again later." },
+      { status: 429 },
+    );
+  }
+  if (roomId === "session-waiting") {
+    return NextResponse.json(
+      { error: "This browser already has a stranger chat waiting." },
+      { status: 429 },
+    );
+  }
+  if (roomId === "session-limit") {
+    return NextResponse.json(
+      { error: "This browser has reached the active stranger chat limit." },
+      { status: 429 },
     );
   }
   const room = await getRoomSnapshot(roomId, clientId, true);

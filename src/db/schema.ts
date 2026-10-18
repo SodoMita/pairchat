@@ -38,6 +38,7 @@ export const chatParticipants = pgTable(
     seat: integer("seat").notNull(),
     publicKey: text("public_key"),
     signingKey: text("signing_key"),
+    abuseSessionHash: text("abuse_session_hash"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     leftAt: timestamp("left_at", { withTimezone: true }),
@@ -47,7 +48,43 @@ export const chatParticipants = pgTable(
     uniqueIndex("chat_participants_room_public_id_idx").on(table.roomId, table.publicId),
     uniqueIndex("chat_participants_room_seat_idx").on(table.roomId, table.seat),
     index("chat_participants_client_idx").on(table.clientId),
+    index("chat_participants_abuse_session_idx").on(table.abuseSessionHash),
   ],
+);
+
+export const chatReports = pgTable(
+  "chat_reports",
+  {
+    id: serial("id").primaryKey(),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    reporterAccessHash: text("reporter_access_hash").notNull(),
+    targetPublicId: uuid("target_public_id").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("chat_reports_once_per_target_idx").on(
+      table.roomId,
+      table.reporterAccessHash,
+      table.targetPublicId,
+    ),
+    index("chat_reports_reporter_idx").on(table.reporterAccessHash, table.createdAt),
+  ],
+);
+
+export const abuseSignals = pgTable(
+  "abuse_signals",
+  {
+    sessionHash: text("session_hash").primaryKey(),
+    score: integer("score").notNull().default(0),
+    cooldownUntil: timestamp("cooldown_until", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("abuse_signals_expires_idx").on(table.expiresAt)],
 );
 
 export type ChatRoom = typeof chatRooms.$inferSelect;

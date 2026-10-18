@@ -42,13 +42,13 @@ export async function DELETE(
   if (!isValidRoomId(roomId) || !isValidClientId(clientId)) {
     return NextResponse.json({ error: "Invalid room request." }, { status: 400 });
   }
+  const accessHash = hashAccessCredential(clientId);
 
   const room = await getRoomSnapshot(roomId, clientId);
   if (!room) {
     return NextResponse.json({ error: "Chat room not found." }, { status: 404 });
   }
 
-  const accessHash = hashAccessCredential(clientId);
   const now = new Date();
   await db.transaction(async (tx) => {
     await tx

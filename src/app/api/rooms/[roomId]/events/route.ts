@@ -1,9 +1,12 @@
 import { db } from "@/db";
 import { chatParticipants } from "@/db/schema";
 import {
+  countParticipantStreams,
   subscribeToChatMessages,
   type LiveChatEvent,
 } from "@/lib/chat-events";
+
+const MAX_STREAMS_PER_PARTICIPANT = 4;
 import { isValidClientId, isValidRoomId } from "@/lib/chat";
 import { allowRequest } from "@/lib/rate-limit";
 import { bearerCredential, requestClientAddress } from "@/lib/request-security";
@@ -44,6 +47,9 @@ export async function GET(
   if (!membership) {
     return NextResponse.json({ error: "You are not in this active chat." }, { status: 403 });
   }
+  if (countParticipantStreams(roomId, accessHash) >= MAX_STREAMS_PER_PARTICIPANT) {
+    return NextResponse.json({ error: "Too many open streams for this chat." }, { status: 429 });
+  }
 
   const encoder = new TextEncoder();
   let cleanup = () => {};
@@ -61,7 +67,12 @@ export async function GET(
               ? event.message
               : event.type === "peer"
                 ? { connected: event.connected }
-                : { senderPublicId: event.senderPublicId, active: event.active };
+                : {
+                    messageId: event.messageId,
+                    recipientPublicId: event.recipientPublicId,
+                    receivedAt: event.receivedAt,
+                    signature: event.signature,
+                  };
           const id = event.type === "message" ? `id: ${event.message.id}\n` : "";
           controller.enqueue(
             encoder.encode(

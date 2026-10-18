@@ -3,15 +3,40 @@ import type { NextRequest } from "next/server";
 export async function readLimitedJson(
   request: NextRequest,
   maxBytes = 12_000,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
+): Promise<Record<string, unknown> | null> {
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (declaredLength > maxBytes) return null;
+
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
   try {
-    const text = await request.text();
-    if (new TextEncoder().encode(text).byteLength > maxBytes) return null;
-    return JSON.parse(text) as unknown;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const parsed: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
   } catch {
+    await reader.cancel().catch(() => {});
     return null;
   }
 }
@@ -22,10 +47,16 @@ export function bearerCredential(request: NextRequest) {
   return match?.[1] ?? null;
 }
 
+export function abuseSessionCredential(request: NextRequest) {
+  return request.headers.get("x-luma-abuse-session");
+}
+
 export function requestClientAddress(request: NextRequest) {
+  // Do not trust a user-controlled X-Forwarded-For chain. Production ingress
+  // should overwrite one of these single-address headers before the app sees it.
   return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     request.headers.get("x-real-ip") ||
+    request.headers.get("cf-connecting-ip") ||
     "unknown"
   );
 }

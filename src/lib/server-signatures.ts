@@ -1,10 +1,10 @@
 import type { EncryptedMessageEnvelope } from "@/lib/chat-events";
 import { envelopeSigningBytes } from "@/lib/e2ee";
 
-export async function verifyServerEnvelopeSignature(
+export async function verifyParticipantSignature(
   serializedPublicKey: string | null,
-  roomId: string,
-  envelope: EncryptedMessageEnvelope,
+  signedBytes: Uint8Array,
+  signatureValue: string,
 ) {
   if (!serializedPublicKey) return false;
   try {
@@ -15,15 +15,27 @@ export async function verifyServerEnvelopeSignature(
       false,
       ["verify"],
     );
-    const signature = Buffer.from(envelope.signature, "base64url");
+    const signature = Buffer.from(signatureValue, "base64url");
     if (signature.byteLength !== 64) return false;
     return crypto.subtle.verify(
       { name: "ECDSA", hash: "SHA-256" },
       publicKey,
       signature,
-      envelopeSigningBytes(roomId, envelope),
+      Buffer.from(signedBytes),
     );
   } catch {
     return false;
   }
+}
+
+export async function verifyServerEnvelopeSignature(
+  serializedPublicKey: string | null,
+  roomId: string,
+  envelope: EncryptedMessageEnvelope,
+) {
+  return verifyParticipantSignature(
+    serializedPublicKey,
+    envelopeSigningBytes(roomId, envelope),
+    envelope.signature,
+  );
 }

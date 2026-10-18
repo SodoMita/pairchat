@@ -1,6 +1,7 @@
 import type { RoomKind, RoomStatus, RoomSnapshot } from "@/lib/chat";
 
 export const LOCAL_CHATS_KEY = "luma-local-chats-v1";
+export const LOCAL_ABUSE_SESSION_KEY = "luma-abuse-session-v1";
 export const MAX_LOCAL_MESSAGES = 500;
 
 export type LocalChatMessage = {
@@ -10,6 +11,7 @@ export type LocalChatMessage = {
   /** Legacy local-only transcript field; never sent over the network. */
   senderClientId?: string;
   createdAt: string;
+  delivery?: "sent" | "delivered";
 };
 
 type SigningMaterial = {
@@ -30,6 +32,7 @@ export type LocalConversation = {
   createdAt: string;
   updatedAt: string;
   encryption?: ConversationEncryption;
+  rememberRandomHistory?: boolean;
   messages: LocalChatMessage[];
 };
 
@@ -41,7 +44,10 @@ function isMessage(value: unknown): value is LocalChatMessage {
     typeof message.body === "string" &&
     (typeof message.senderPublicId === "string" ||
       typeof message.senderClientId === "string") &&
-    typeof message.createdAt === "string"
+    typeof message.createdAt === "string" &&
+    (message.delivery === undefined ||
+      message.delivery === "sent" ||
+      message.delivery === "delivered")
   );
 }
 
@@ -86,6 +92,8 @@ function isConversation(value: unknown): value is LocalConversation {
     typeof conversation.createdAt === "string" &&
     typeof conversation.updatedAt === "string" &&
     (conversation.encryption === undefined || isEncryption(conversation.encryption)) &&
+    (conversation.rememberRandomHistory === undefined ||
+      typeof conversation.rememberRandomHistory === "boolean") &&
     Array.isArray(conversation.messages) &&
     conversation.messages.every(isMessage)
   );
@@ -117,6 +125,10 @@ export function saveLocalRoom(
 ): LocalConversation[] {
   const current = loadLocalConversations();
   const existing = current.find((item) => item.roomId === room.id);
+  const forgetRandomHistory =
+    room.kind === "random" &&
+    room.status === "ended" &&
+    !existing?.rememberRandomHistory;
   const next: LocalConversation = {
     roomId: room.id,
     clientId,
@@ -132,12 +144,54 @@ export function saveLocalRoom(
       room.status === "ended"
         ? undefined
         : encryption ?? existing?.encryption,
-    messages: existing?.messages ?? [],
+    rememberRandomHistory: existing?.rememberRandomHistory ?? false,
+    messages: forgetRandomHistory ? [] : existing?.messages ?? [],
   };
   return writeLocalConversations([
     next,
     ...current.filter((item) => item.roomId !== room.id),
   ]);
+}
+
+export function setLocalRandomHistoryPreference(
+  roomId: string,
+  rememberRandomHistory: boolean,
+): LocalConversation[] {
+  const current = loadLocalConversations();
+  return writeLocalConversations(
+    current.map((conversation) =>
+      conversation.roomId === roomId
+        ? { ...conversation, rememberRandomHistory }
+        : conversation,
+    ),
+  );
+}
+
+export function deleteLocalConversation(roomId: string): LocalConversation[] {
+  return writeLocalConversations(
+    loadLocalConversations().filter((conversation) => conversation.roomId !== roomId),
+  );
+}
+
+export function markLocalMessageDelivered(
+  roomId: string,
+  messageId: string,
+): LocalConversation[] {
+  const current = loadLocalConversations();
+  return writeLocalConversations(
+    current.map((conversation) =>
+      conversation.roomId !== roomId
+        ? conversation
+        : {
+            ...conversation,
+            messages: conversation.messages.map((message) =>
+              message.id === messageId
+                ? { ...message, delivery: "delivered" as const }
+                : message,
+            ),
+          },
+    ),
+  );
 }
 
 export function saveLocalEncryption(
@@ -185,6 +239,12 @@ export function setLocalRoomStatus(
             ...conversation,
             status,
             encryption: status === "ended" ? undefined : conversation.encryption,
+            messages:
+              status === "ended" &&
+              conversation.kind === "random" &&
+              !conversation.rememberRandomHistory
+                ? []
+                : conversation.messages,
             updatedAt: new Date().toISOString(),
           }
         : conversation,
@@ -194,4 +254,34 @@ export function setLocalRoomStatus(
 
 export function createParticipantId() {
   return `guest_${crypto.randomUUID().replaceAll("-", "")}`;
+}
+
+export function getOrCreateAbuseSession() {
+  if (typeof window === "undefined") return "";
+  try {
+    const existing = JSON.parse(
+      window.localStorage.getItem(LOCAL_ABUSE_SESSION_KEY) ?? "null",
+    ) as { token?: string; expiresAt?: number } | null;
+    if (
+      existing &&
+      typeof existing.token === "string" &&
+      /^as_[A-Za-z0-9_-]{43}$/u.test(existing.token) &&
+      typeof existing.expiresAt === "number" &&
+      existing.expiresAt > Date.now()
+    ) {
+      return existing.token;
+    }
+  } catch {
+    // Replace malformed storage with a fresh opaque session below.
+  }
+
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const token = `as_${btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "")}`;
+  window.localStorage.setItem(
+    LOCAL_ABUSE_SESSION_KEY,
+    JSON.stringify({ token, expiresAt: Date.now() + 24 * 60 * 60_000 }),
+  );
+  return token;
 }

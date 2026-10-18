@@ -38,6 +38,10 @@ export function isValidParticipantPublicId(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
 }
 
+export function isValidAbuseSession(value: unknown): value is string {
+  return typeof value === "string" && /^as_[A-Za-z0-9_-]{43}$/u.test(value);
+}
+
 export function isValidRoomId(value: unknown): value is string {
   return typeof value === "string" && /^[rp]_[a-f0-9]{32}$/u.test(value);
 }

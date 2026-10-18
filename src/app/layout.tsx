@@ -17,6 +17,12 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
+/**
+ * Deliberately static: no request-time APIs are read here, so both the home
+ * shell and the invite shell are prerendered at build time and served as
+ * cacheable HTML. All dynamic behaviour (identity, rooms, live relay) happens
+ * in the browser against same-origin `/api` routes only.
+ */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">

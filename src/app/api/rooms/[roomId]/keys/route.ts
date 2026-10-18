@@ -22,6 +22,7 @@ export async function POST(
   const { roomId } = await context.params;
   const body = await readLimitedJson(request);
   const clientId = bearerCredential(request);
+  const accessHash = clientId ? hashAccessCredential(clientId) : null;
   const signingKey = body?.signingKey;
 
   if (
@@ -32,7 +33,6 @@ export async function POST(
     return NextResponse.json({ error: "Invalid signing key." }, { status: 400 });
   }
 
-  const accessHash = hashAccessCredential(clientId);
   const outcome = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${roomId}))`);
     const [participant] = await tx
@@ -41,7 +41,7 @@ export async function POST(
       .where(
         and(
           eq(chatParticipants.roomId, roomId),
-          eq(chatParticipants.clientId, accessHash),
+          eq(chatParticipants.clientId, accessHash ?? ""),
         ),
       )
       .limit(1);

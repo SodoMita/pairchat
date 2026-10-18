@@ -1,7 +1,8 @@
 "use client";
 
-import type { RoomSnapshot } from "@/lib/chat";
+import { isValidRoomId, type RoomSnapshot } from "@/lib/chat";
 import type { EncryptedMessageEnvelope } from "@/lib/chat-events";
+import { isClientAdmissionChallenge, solveAdmissionChallenge } from "@/lib/admission-client";
 import {
   createEcdhCredentials,
   createPrivateSecret,
@@ -13,6 +14,8 @@ import {
   isValidPrivateSecret,
   privateSecretCommitment,
   serializePublicKey,
+  signDeliveryAck,
+  verifyDeliveryAck,
   serializeSigningKey,
   signEnvelope,
   verifyEnvelopeSignature,
@@ -27,11 +30,15 @@ import {
 } from "@/lib/i18n";
 import {
   createParticipantId,
+  deleteLocalConversation,
+  getOrCreateAbuseSession,
   loadLocalConversations,
   LOCAL_CHATS_KEY,
+  markLocalMessageDelivered,
   saveLocalEncryption,
   saveLocalMessage,
   saveLocalRoom,
+  setLocalRandomHistoryPreference,
   setLocalRoomStatus,
   type ConversationEncryption,
   type LocalChatMessage,
@@ -40,9 +47,12 @@ import {
 import {
   AlertTriangle,
   ArrowRight,
+  Bookmark,
+  BookmarkCheck,
   Check,
   ChevronRight,
   Copy,
+  Flag,
   Globe2,
   HardDrive,
   Heart,
@@ -56,6 +66,7 @@ import {
   ShieldCheck,
   Shuffle,
   Sparkles,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -88,6 +99,37 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   };
   if (!response.ok) throw new Error(payload.error || "Something went wrong.");
   return payload;
+}
+
+async function requestMatch(
+  participantId: string,
+  abuseSession: string,
+  keys: { publicKey: string | null; signingKey: string | null },
+): Promise<{ room: RoomSnapshot }> {
+  const send = (challenge?: unknown) =>
+    fetch("/api/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${participantId}`,
+        "X-Luma-Abuse-Session": abuseSession,
+      },
+      cache: "no-store",
+      body: JSON.stringify(challenge ? { ...keys, challenge } : keys),
+    });
+
+  let response = await send();
+  if (response.status === 428) {
+    const payload = (await response.json().catch(() => ({}))) as { challenge?: unknown };
+    if (!isClientAdmissionChallenge(payload.challenge)) {
+      throw new Error("Admission check unavailable.");
+    }
+    const solved = await solveAdmissionChallenge(payload.challenge);
+    response = await send(solved);
+  }
+  const data = (await response.json().catch(() => ({}))) as { room?: RoomSnapshot; error?: string };
+  if (!response.ok || !data.room) throw new Error(data.error || "Could not find a chat.");
+  return { room: data.room };
 }
 
 function Brand() {
@@ -219,6 +261,7 @@ function ConversationSidebar({
   language,
   t,
   onOpenChat,
+  onDeleteHistory,
   contained = false,
 }: {
   conversations: LocalConversation[];
@@ -226,6 +269,7 @@ function ConversationSidebar({
   language: LanguageCode;
   t: Translator;
   onOpenChat: (conversation: LocalConversation) => void;
+  onDeleteHistory?: (conversation: LocalConversation) => void;
   contained?: boolean;
 }) {
   return (
@@ -254,12 +298,12 @@ function ConversationSidebar({
               ? t("waitingSomeone")
               : t("conversationEnded");
           return (
-            <button
-              key={conversation.roomId}
-              onClick={() => onOpenChat(conversation)}
-              aria-current={selected ? "page" : undefined}
-              className={`group min-w-[235px] rounded-2xl border p-3.5 text-start transition lg:min-w-0 ${selected ? "border-[#f2a08e] bg-white shadow-[0_8px_20px_rgba(60,67,63,0.08)]" : "border-transparent bg-white/55 hover:border-[#dfe1da] hover:bg-white"}`}
-            >
+            <div key={conversation.roomId} className="relative min-w-[235px] lg:min-w-0">
+              <button
+                onClick={() => onOpenChat(conversation)}
+                aria-current={selected ? "page" : undefined}
+                className={`group w-full rounded-2xl border p-3.5 text-start transition ${selected ? "border-[#f2a08e] bg-white shadow-[0_8px_20px_rgba(60,67,63,0.08)]" : "border-transparent bg-white/55 hover:border-[#dfe1da] hover:bg-white"}`}
+              >
               <div className="flex items-start gap-3">
                 <span className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-xl ${selected ? "bg-[#fff0ea] text-[#ef6547]" : "bg-[#e9efe5] text-[#708b68]"}`}>
                   {conversation.kind === "private" ? <LockKeyhole size={15} /> : <UserRound size={15} />}
@@ -274,7 +318,19 @@ function ConversationSidebar({
                   <span className="mt-1.5 block truncate text-[10px] text-[#8a928f]">{lastMessage?.body ?? t("noLocalMessages")}</span>
                 </span>
               </div>
-            </button>
+              </button>
+              {!active && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteHistory?.(conversation)}
+                  className="absolute end-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-white/85 text-[#9aa19e] opacity-0 shadow-sm transition hover:bg-[#fff0ec] hover:text-[#df6045] focus:opacity-100 group-hover:opacity-100"
+                  aria-label={t("deleteHistory")}
+                  title={t("deleteHistory")}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -297,6 +353,7 @@ function HomeScreen({
   language,
   onLanguage,
   onOpenChat,
+  onDeleteHistory,
 }: {
   onRandom: () => void;
   onPrivate: () => void;
@@ -307,6 +364,7 @@ function HomeScreen({
   language: LanguageCode;
   onLanguage: (language: LanguageCode) => void;
   onOpenChat: (conversation: LocalConversation) => void;
+  onDeleteHistory: (conversation: LocalConversation) => void;
 }) {
   const features = [
     [Zap, t("instantTitle"), t("instantCopy")],
@@ -318,7 +376,7 @@ function HomeScreen({
     <div className="min-h-screen overflow-hidden bg-[#f8f6f0]">
       <Header t={t} language={language} onLanguage={onLanguage} />
       <main className="home-with-sidebar mx-auto grid w-full max-w-[1500px] lg:grid-cols-[280px_minmax(0,1fr)]">
-        <ConversationSidebar conversations={conversations} language={language} t={t} onOpenChat={onOpenChat} />
+        <ConversationSidebar conversations={conversations} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
         <div className="min-w-0">
         <section className="relative mx-auto grid w-full max-w-[1180px] items-center gap-14 px-5 pb-20 pt-12 sm:px-8 sm:pt-16 lg:grid-cols-[1.04fr_0.96fr] lg:pb-28 lg:pt-20">
           <div className="relative z-10 max-w-[625px]">
@@ -389,6 +447,7 @@ function MatchingScreen({
   language,
   onLanguage,
   onOpenChat,
+  onDeleteHistory,
 }: {
   onCancel: () => void;
   conversations: LocalConversation[];
@@ -397,12 +456,13 @@ function MatchingScreen({
   language: LanguageCode;
   onLanguage: (language: LanguageCode) => void;
   onOpenChat: (conversation: LocalConversation) => void;
+  onDeleteHistory: (conversation: LocalConversation) => void;
 }) {
   return (
     <div className="min-h-screen bg-[#f8f6f0]">
       <Header t={t} language={language} onLanguage={onLanguage} inRoom />
       <main className="mx-auto grid min-h-[calc(100vh-76px)] w-full max-w-[1400px] lg:grid-cols-[280px_minmax(0,1fr)]">
-        <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} />
+        <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
         <div className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20 pt-10 lg:pt-0">
           <div className="w-full max-w-[580px] text-center">
             <div className="search-radar mx-auto mb-9 grid h-40 w-40 place-items-center rounded-full">
@@ -431,13 +491,16 @@ function ChatScreen({
   sending,
   copied,
   relayReady,
-  partnerTyping,
   safetyCode,
+  rememberRandomHistory,
   conversations,
   t,
   language,
   onLanguage,
   onOpenChat,
+  onDeleteHistory,
+  onToggleRememberRandom,
+  onReport,
   onDraft,
   onSend,
   onKeyDown,
@@ -453,13 +516,16 @@ function ChatScreen({
   sending: boolean;
   copied: boolean;
   relayReady: boolean;
-  partnerTyping: boolean;
   safetyCode: string;
+  rememberRandomHistory: boolean;
   conversations: LocalConversation[];
   t: Translator;
   language: LanguageCode;
   onLanguage: (language: LanguageCode) => void;
   onOpenChat: (conversation: LocalConversation) => void;
+  onDeleteHistory: (conversation: LocalConversation) => void;
+  onToggleRememberRandom: () => void;
+  onReport: (reason: "spam" | "scam" | "harassment" | "unsafe") => Promise<boolean>;
   onDraft: (value: string) => void;
   onSend: (event?: FormEvent) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -472,6 +538,10 @@ function ChatScreen({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const localConversation = conversations.find((item) => item.roomId === room.id);
   const [confirmAction, setConfirmAction] = useState<"leave" | "next" | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportError, setReportError] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
   const waiting = room.status === "waiting";
   const ended = room.status === "ended" || !room.participantActive;
   const secureReady = relayReady && Boolean(safetyCode);
@@ -533,12 +603,26 @@ function ChatScreen({
     if (action === "leave") onLeave();
   };
 
+  const submitReport = async (reason: "spam" | "scam" | "harassment" | "unsafe") => {
+    if (reporting) return;
+    setReportError(false);
+    setReporting(true);
+    const sent = await onReport(reason);
+    setReporting(false);
+    if (sent) {
+      setReportSent(true);
+      setReportOpen(false);
+    } else {
+      setReportError(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f3ed]">
       <Header t={t} language={language} onLanguage={onLanguage} inRoom />
       <main className="mx-auto max-w-[1400px] px-3 pb-5 sm:px-6 sm:pb-8">
         <div className="chat-shell grid h-[calc(100vh-102px)] min-h-[610px] overflow-hidden rounded-[26px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.10)] lg:grid-cols-[280px_1fr]">
-          <ConversationSidebar conversations={conversations} currentRoomId={room.id} language={language} t={t} onOpenChat={onOpenChat} contained />
+          <ConversationSidebar conversations={conversations} currentRoomId={room.id} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} contained />
 
           <section className="flex min-w-0 flex-col">
             <div className="flex h-[74px] shrink-0 items-center justify-between border-b border-[#ecece7] px-4 sm:px-6">
@@ -552,6 +636,8 @@ function ChatScreen({
               <div className="flex items-center gap-2">
                 {safetyCode && <span className="hidden h-9 items-center gap-2 rounded-xl bg-[#edf3e9] px-3 font-mono text-[9px] font-bold text-[#587052] md:inline-flex" title={t("compareCode")}><ShieldCheck size={13} /> {t("safetyCode")}: {safetyCode}</span>}
                 <button onClick={onPause} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]" aria-label={t("backToChats")}><Home size={14} /><span className="hidden xl:inline">{t("backToChats")}</span></button>
+                {room.kind === "random" && !ended && <button onClick={() => setReportOpen(true)} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${reportSent ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#fff7f4] hover:text-[#d75d44]"}`} title={reportSent ? t("reportSent") : t("report")}>{reportSent ? <Check size={14} /> : <Flag size={14} />}<span className="hidden xl:inline">{reportSent ? t("reportSent") : t("report")}</span></button>}
+                {room.kind === "random" && !ended && <button onClick={onToggleRememberRandom} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${rememberRandomHistory ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#f7f7f3]"}`} title={t("rememberRandom")}><span>{rememberRandomHistory ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}</span><span className="hidden xl:inline">{t("rememberRandom")}</span></button>}
                 {room.kind === "private" && !ended && <button onClick={onCopy} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3] sm:px-4">{copied ? <Check size={14} className="text-[#6ca45e]" /> : <Copy size={14} />}<span className="hidden sm:inline">{copied ? t("copied") : t("inviteLink")}</span></button>}
                 {room.kind === "random" && !waiting && !ended && <button onClick={() => setConfirmAction("next")} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]"><Shuffle size={14} /><span className="hidden sm:inline">{t("next")}</span></button>}
                 <button onClick={() => ended ? onLeave() : setConfirmAction("leave")} className="grid h-9 w-9 place-items-center rounded-xl text-[#929995] transition hover:bg-[#fff0ec] hover:text-[#e76145]" aria-label={t("leaveChat")}><LogOut size={16} /></button>
@@ -588,7 +674,10 @@ function ChatScreen({
                             {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
                             <div className={`max-w-[78%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
                               <div className={`whitespace-pre-wrap break-words px-4 py-3 text-start text-[13px] leading-6 ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
-                              <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">{new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}</p>
+                              <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">
+                                {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
+                                {mine && message.delivery && <span className="ms-2">{message.delivery === "delivered" ? t("deliveredStatus") : t("sentStatus")}</span>}
+                              </p>
                             </div>
                           </div>
                         );
@@ -598,6 +687,12 @@ function ChatScreen({
                 </>
               ) : (
                 <>
+                  {room.kind === "random" && (
+                    <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-[#f0dfd8] bg-[#fff8f4] px-3.5 py-3 text-start text-[10px] leading-5 text-[#8a6d63]">
+                      <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#d66b51]" />
+                      <span>{t("strangerTrust")} <span className="mt-1 block font-semibold text-[#92796e]">{t("ephemeralRandom")}</span></span>
+                    </div>
+                  )}
                   <div className="mb-7 flex items-center gap-3 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#b0b5b2]"><span className="h-px flex-1 bg-[#eeeeea]" />{t("conversationStarted")}<span className="h-px flex-1 bg-[#eeeeea]" /></div>
                   {messages.length === 0 && (
                     <div className="mx-auto mt-8 max-w-sm text-center">
@@ -615,7 +710,10 @@ function ChatScreen({
                           {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
                           <div className={`max-w-[78%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
                             <div className={`whitespace-pre-wrap break-words px-4 py-3 text-start text-[13px] leading-6 ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white shadow-[0_7px_18px_rgba(255,103,71,0.13)]" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
-                            <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">{new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}</p>
+                            <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">
+                              {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
+                              {mine && message.delivery && <span className="ms-2">{message.delivery === "delivered" ? t("deliveredStatus") : t("sentStatus")}</span>}
+                            </p>
                           </div>
                         </div>
                       );
@@ -623,18 +721,11 @@ function ChatScreen({
                   </div>
                 </>
               )}
-              {partnerTyping && !waiting && !ended && (
-                <div className="mt-5 flex items-center gap-2.5 text-[10px] font-semibold text-[#78847b]" role="status" aria-live="polite">
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-[#edf3e9] text-[#63805a]"><UserRound size={13} /></span>
-                  <span>{t("partnerTyping")}</span>
-                  <span className="typing-indicator" aria-hidden="true"><i /><i /><i /></span>
-                </div>
-              )}
             </div>
 
             <form onSubmit={onSend} className="shrink-0 border-t border-[#ecece7] bg-white p-3 sm:p-4">
               <div className={`flex items-end gap-2 rounded-2xl border bg-[#fafaf7] p-2 ps-4 transition focus-within:border-[#f5a18e] focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,103,71,0.08)] ${waiting || ended || !secureReady ? "border-[#e8e9e4] opacity-60" : "border-[#e2e3dd]"}`}>
-                <textarea ref={composerRef} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={onKeyDown} disabled={waiting || ended || !secureReady} maxLength={1200} rows={1} placeholder={waiting ? t("waitingPlaceholder") : ended ? t("endedPlaceholder") : !secureReady ? t("connecting") : t("writeMessage")} className="max-h-28 min-h-10 flex-1 resize-none bg-transparent py-2 text-[13px] leading-6 text-[#313b38] outline-none placeholder:text-[#aab0ad]" />
+                <textarea ref={composerRef} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={onKeyDown} disabled={waiting || ended || !secureReady || sending} maxLength={1200} rows={1} placeholder={waiting ? t("waitingPlaceholder") : ended ? t("endedPlaceholder") : !secureReady ? t("connecting") : t("writeMessage")} className="max-h-28 min-h-10 flex-1 resize-none bg-transparent py-2 text-[13px] leading-6 text-[#313b38] outline-none placeholder:text-[#aab0ad]" />
                 <button type="submit" disabled={!draft.trim() || waiting || ended || !secureReady || sending} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#ff6747] text-white transition hover:bg-[#f45d3e] disabled:bg-[#d9dcd6]" aria-label={t("sendMessage")}>{sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}</button>
               </div>
               <div className="mt-2 hidden items-center justify-between px-1 text-[9px] font-semibold text-[#abb0ad] sm:flex"><span>{t("keyboardHint")}</span><span>{draft.length}/1200</span></div>
@@ -642,6 +733,28 @@ function ChatScreen({
           </section>
         </div>
       </main>
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#17211f]/45 px-5 backdrop-blur-[3px]" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target && !reporting) setReportOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="report-title" className="w-full max-w-[440px] rounded-[26px] border border-white/70 bg-white p-6 shadow-[0_28px_90px_rgba(25,34,31,0.28)] sm:p-8">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff0eb] text-[#df6347]"><Flag size={21} /></div>
+            <h2 id="report-title" className="mt-5 text-[23px] font-extrabold tracking-[-0.04em] text-[#26312e]">{t("reportTitle")}</h2>
+            <p className="mt-3 text-[12px] leading-6 text-[#737c78]">{t("reportCopy")}</p>
+            {reportError && <p className="mt-4 text-[11px] font-bold text-[#d75c45]">{t("reportFailed")}</p>}
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              {([
+                ["spam", t("reportSpam")],
+                ["scam", t("reportScam")],
+                ["harassment", t("reportHarassment")],
+                ["unsafe", t("reportUnsafe")],
+              ] as const).map(([reason, label]) => (
+                <button key={reason} onClick={() => void submitReport(reason)} disabled={reporting} className="min-h-11 rounded-xl border border-[#e1e3dd] px-4 text-start text-[11px] font-extrabold text-[#59635f] transition hover:border-[#f1b5a5] hover:bg-[#fff8f5] disabled:opacity-60">{label}</button>
+              ))}
+            </div>
+            <button onClick={() => setReportOpen(false)} disabled={reporting} className="mt-5 text-[11px] font-extrabold text-[#89918e] transition hover:text-[#3d4744]">{t("cancel")}</button>
+          </section>
+        </div>
+      )}
 
       {confirmAction && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#17211f]/45 px-5 backdrop-blur-[3px]" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setConfirmAction(null); }}>
@@ -660,11 +773,13 @@ function ChatScreen({
   );
 }
 
-export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
+export default function ChatApp() {
   const router = useRouter();
   const [clientId, setClientId] = useState("");
+  const [abuseSession, setAbuseSession] = useState("");
   const [language, setLanguage] = useState<LanguageCode>("en");
-  const [screen, setScreen] = useState<Screen>(initialRoomId ? "loading" : "home");
+  const [initialRoomId, setInitialRoomId] = useState<string | undefined>(undefined);
+  const [screen, setScreen] = useState<Screen>("home");
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [conversations, setConversations] = useState<LocalConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -673,19 +788,26 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   const [busy, setBusy] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>("checking");
   const [relayReady, setRelayReady] = useState(false);
-  const [partnerTyping, setPartnerTyping] = useState(false);
   const [safetyCode, setSafetyCode] = useState("");
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const openedRoomId = useRef<string | null>(null);
-  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTypingSignal = useRef(0);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
 
   useEffect(() => {
     setConversations(loadLocalConversations());
+    setAbuseSession(getOrCreateAbuseSession());
     setStorageReady(true);
+
+    // `/r/<roomId>` is served by the static invite shell via a rewrite, so the
+    // room id is read from the URL here instead of from server-rendered props.
+    const inviteMatch = window.location.pathname.match(/^\/r\/([^/]+)\/?$/u);
+    if (inviteMatch && isValidRoomId(inviteMatch[1])) {
+      openedRoomId.current = null;
+      setInitialRoomId(inviteMatch[1]);
+      setScreen("loading");
+    }
 
     const savedLanguage = window.localStorage.getItem("luma-language");
     if (isLanguageCode(savedLanguage)) {
@@ -748,8 +870,12 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   }, [room?.id, room?.partnerPublicKey, room?.partnerSigningKey]);
 
   useEffect(() => {
+    // One lightweight same-origin probe, then a slow heartbeat that only runs
+    // while the tab is visible. No third-party or per-render requests.
     let cancelled = false;
+    let lastChecked = 0;
     const checkHealth = async () => {
+      lastChecked = Date.now();
       try {
         const response = await fetch("/api/health", { cache: "no-store" });
         const payload = (await response.json()) as { ok?: boolean };
@@ -760,46 +886,24 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         if (!cancelled) setServiceStatus("unavailable");
       }
     };
-    const checkWhenVisible = () => {
-      if (document.visibilityState === "visible") void checkHealth();
+    const maybeCheck = () => {
+      if (cancelled) return;
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastChecked < 55_000) return;
+      void checkHealth();
     };
 
     void checkHealth();
-    const interval = window.setInterval(checkHealth, 15_000);
-    window.addEventListener("online", checkHealth);
-    document.addEventListener("visibilitychange", checkWhenVisible);
+    const interval = window.setInterval(maybeCheck, 60_000);
+    window.addEventListener("online", maybeCheck);
+    document.addEventListener("visibilitychange", maybeCheck);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
-      window.removeEventListener("online", checkHealth);
-      document.removeEventListener("visibilitychange", checkWhenVisible);
+      window.removeEventListener("online", maybeCheck);
+      document.removeEventListener("visibilitychange", maybeCheck);
     };
   }, []);
-
-  const sendTypingSignal = useCallback((active: boolean) => {
-    if (!room || !clientId || !relayReady || room.status !== "active") return;
-    const now = Date.now();
-    if (active && now - lastTypingSignal.current < 800) return;
-    if (active) lastTypingSignal.current = now;
-    void requestJson(`/api/rooms/${room.id}/typing`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${clientId}` },
-      body: JSON.stringify({ active }),
-    }).catch(() => null);
-  }, [clientId, relayReady, room?.id, room?.status]);
-
-  const updateDraft = useCallback((value: string) => {
-    setDraft(value);
-    if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    const active = value.trim().length > 0;
-    sendTypingSignal(active);
-    if (active) {
-      typingTimeout.current = setTimeout(() => {
-        sendTypingSignal(false);
-        typingTimeout.current = null;
-      }, 1_400);
-    }
-  }, [sendTypingSignal]);
 
   const acceptRoom = useCallback((
     nextRoom: RoomSnapshot | null,
@@ -823,6 +927,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   }, []);
 
   const startRandom = useCallback(async () => {
+    if (!abuseSession) return;
     const participantId = createParticipantId();
     setClientId(participantId);
     setBusy(true);
@@ -830,22 +935,18 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     setScreen("matching");
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
-      const data = await requestJson<{ room: RoomSnapshot }>("/api/match", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${participantId}` },
-        body: JSON.stringify({
-          publicKey: serializePublicKey(encryption),
-          signingKey: serializeSigningKey(encryption),
-        }),
+      const data = await requestMatch(participantId, abuseSession, {
+        publicKey: serializePublicKey(encryption),
+        signingKey: serializeSigningKey(encryption),
       });
       acceptRoom(data.room, participantId, encryption);
-    } catch {
-      setError(t("findError"));
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : t("findError"));
       setScreen("error");
     } finally {
       setBusy(false);
     }
-  }, [acceptRoom, t]);
+  }, [abuseSession, acceptRoom, t]);
 
   const createPrivate = useCallback(async () => {
     const participantId = createParticipantId();
@@ -945,7 +1046,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
                 }),
               },
             )
-          : await requestJson<{ room: RoomSnapshot }>(`/api/rooms/${initialRoomId}/join`, {
+            : await requestJson<{ room: RoomSnapshot }>(`/api/rooms/${initialRoomId}/join`, {
               method: "POST",
               headers: { Authorization: `Bearer ${participantId}` },
               body: JSON.stringify({
@@ -972,34 +1073,10 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   }, [acceptRoom, initialRoomId, storageReady]);
 
   useEffect(() => {
-    if (screen !== "home" || !storageReady) return;
-    let cancelled = false;
-    const refreshStatuses = async () => {
-      const local = loadLocalConversations();
-      await Promise.all(
-        local
-          .filter((conversation) => conversation.status !== "ended")
-          .map(async (conversation) => {
-            try {
-              const data = await requestJson<{ room: RoomSnapshot }>(
-                `/api/rooms/${conversation.roomId}?touch=false`,
-                { headers: { Authorization: `Bearer ${conversation.clientId}` } },
-              );
-              saveLocalRoom(data.room, conversation.clientId);
-            } catch {
-              setLocalRoomStatus(conversation.roomId, "ended");
-            }
-          }),
-      );
-      if (!cancelled) setConversations(loadLocalConversations());
-    };
-    void refreshStatuses();
-    return () => { cancelled = true; };
-  }, [screen, storageReady]);
-
-  useEffect(() => {
     if (screen !== "matching" || !clientId) return;
     const poll = window.setInterval(async () => {
+      // Queue polling is the only fast loop, and it stops when the tab is hidden.
+      if (document.visibilityState !== "visible") return;
       try {
         const data = await requestJson<{ room: RoomSnapshot | null }>(
           "/api/match",
@@ -1009,14 +1086,17 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
       } catch {
         // A temporary polling issue should not end the queue.
       }
-    }, 1100);
+    }, 1500);
     return () => window.clearInterval(poll);
   }, [acceptRoom, clientId, screen]);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId) return;
     const roomId = room.id;
+    // Presence comes from the relay's SSE `peer` events; this slow safety-net
+    // poll only reconciles room status and skips work while the tab is hidden.
     const poll = window.setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const data = await requestJson<{ room: RoomSnapshot }>(
           `/api/rooms/${roomId}`,
@@ -1027,7 +1107,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
       } catch {
         // Keep local history visible during brief connectivity drops.
       }
-    }, 2500);
+    }, 20_000);
     return () => window.clearInterval(poll);
   }, [clientId, room?.id, screen]);
 
@@ -1070,6 +1150,28 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
           senderPublicId: envelope.senderPublicId,
           createdAt: envelope.createdAt,
         });
+
+        // Acknowledge only after sender-signature verification and AEAD decryption succeed.
+        if (envelope.senderPublicId !== roomSnapshot.participantPublicId) {
+          const receivedAt = new Date().toISOString();
+          const ackSignature = await signDeliveryAck(
+            conversation?.encryption,
+            roomId,
+            envelope.id,
+            roomSnapshot.participantPublicId,
+            receivedAt,
+          );
+          await requestJson(`/api/rooms/${roomId}/ack`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${clientId}` },
+            body: JSON.stringify({
+              messageId: envelope.id,
+              recipientPublicId: roomSnapshot.participantPublicId,
+              receivedAt,
+              signature: ackSignature,
+            }),
+          });
+        }
       } catch {
         // Authentication failure means wrong key or tampered ciphertext: fail closed.
       }
@@ -1089,30 +1191,41 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         try {
           const peer = JSON.parse(payload) as { connected?: boolean };
           setRelayReady(peer.connected === true);
-          if (!peer.connected) setPartnerTyping(false);
         } catch {
           setRelayReady(false);
-          setPartnerTyping(false);
         }
       }
-      if (eventType === "typing") {
-        try {
-          const typing = JSON.parse(payload) as {
-            senderPublicId?: string;
-            active?: boolean;
-          };
-          if (typing.senderPublicId !== roomSnapshot.partnerPublicId) return;
-          setPartnerTyping(typing.active === true);
-          if (typingTimeout.current) clearTimeout(typingTimeout.current);
-          if (typing.active) {
-            typingTimeout.current = setTimeout(() => {
-              setPartnerTyping(false);
-              typingTimeout.current = null;
-            }, 3_500);
+      if (eventType === "ack") {
+        void (async () => {
+          try {
+            const ack = JSON.parse(payload) as {
+              messageId?: string;
+              recipientPublicId?: string;
+              receivedAt?: string;
+              signature?: string;
+            };
+            if (
+              typeof ack.messageId !== "string" ||
+              ack.recipientPublicId !== roomSnapshot.partnerPublicId ||
+              typeof ack.receivedAt !== "string" ||
+              typeof ack.signature !== "string"
+            ) return;
+            const signatureValid = await verifyDeliveryAck(
+              roomSnapshot.partnerSigningKey,
+              roomId,
+              ack.messageId,
+              ack.recipientPublicId,
+              ack.receivedAt,
+              ack.signature,
+            );
+            if (!signatureValid) return;
+            const next = markLocalMessageDelivered(roomId, ack.messageId);
+            setConversations(next);
+            setMessages(next.find((item) => item.roomId === roomId)?.messages ?? []);
+          } catch {
+            // Delivery status is best-effort; a malformed control event changes no content.
           }
-        } catch {
-          setPartnerTyping(false);
-        }
+        })();
       }
     };
 
@@ -1154,11 +1267,6 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     void connect();
     return () => {
       setRelayReady(false);
-      setPartnerTyping(false);
-      if (typingTimeout.current) {
-        clearTimeout(typingTimeout.current);
-        typingTimeout.current = null;
-      }
       abort.abort();
     };
   }, [clientId, room?.id, room?.partnerPublicKey, room?.status, screen, storeMessage]);
@@ -1173,19 +1281,35 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     router.push("/");
   }, [router]);
 
-  const leaveRoom = useCallback(async (goHome = true) => {
+  const leaveRoom = useCallback((goHome = true) => {
     const currentRoom = room;
-    if (currentRoom && clientId) {
-      await requestJson(`/api/rooms/${currentRoom.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${clientId}` },
-        body: JSON.stringify({}),
-      }).catch(() => null);
+    const accessToken = clientId;
+
+    if (currentRoom && accessToken) {
+      // Stop locally first: close the rendered transcript/stream and erase the room key.
       setConversations(setLocalRoomStatus(currentRoom.id, "ended"));
+      const endOnServer = async (attempt = 0): Promise<void> => {
+        try {
+          await requestJson(`/api/rooms/${currentRoom.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({}),
+          });
+        } catch {
+          if (attempt < 3) {
+            await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+            await endOnServer(attempt + 1);
+          }
+        }
+      };
+      void endOnServer();
     }
+
     setRoom(null);
     setMessages([]);
     setDraft("");
+    setRelayReady(false);
+    setSafetyCode("");
     if (goHome) {
       setClientId("");
       setScreen("home");
@@ -1194,29 +1318,26 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
   }, [clientId, room, router]);
 
   const nextChat = useCallback(async () => {
-    await leaveRoom(false);
+    if (!abuseSession) return;
+    leaveRoom(false);
     const participantId = createParticipantId();
     setClientId(participantId);
     setScreen("matching");
     setBusy(true);
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
-      const data = await requestJson<{ room: RoomSnapshot }>("/api/match", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${participantId}` },
-        body: JSON.stringify({
-          publicKey: serializePublicKey(encryption),
-          signingKey: serializeSigningKey(encryption),
-        }),
+      const data = await requestMatch(participantId, abuseSession, {
+        publicKey: serializePublicKey(encryption),
+        signingKey: serializeSigningKey(encryption),
       });
       acceptRoom(data.room, participantId, encryption);
-    } catch {
-      setError(t("nextError"));
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : t("nextError"));
       setScreen("error");
     } finally {
       setBusy(false);
     }
-  }, [acceptRoom, leaveRoom, t]);
+  }, [abuseSession, acceptRoom, leaveRoom, t]);
 
   const cancelSearch = useCallback(async () => {
     await leaveRoom(true);
@@ -1226,11 +1347,6 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     event?.preventDefault();
     const body = draft.trim();
     if (!body || !room || !clientId || !relayReady || !safetyCode || sending) return;
-    sendTypingSignal(false);
-    if (typingTimeout.current) {
-      clearTimeout(typingTimeout.current);
-      typingTimeout.current = null;
-    }
     setSending(true);
     setDraft("");
     try {
@@ -1251,6 +1367,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
         body,
         senderPublicId: room.participantPublicId,
         createdAt: envelope.createdAt,
+        delivery: "sent",
       });
     } catch {
       setDraft(body);
@@ -1258,7 +1375,7 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     } finally {
       setSending(false);
     }
-  }, [clientId, draft, relayReady, room, safetyCode, sendTypingSignal, sending, storeMessage, t]);
+  }, [clientId, draft, relayReady, room, safetyCode, sending, storeMessage, t]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -1291,6 +1408,46 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     window.setTimeout(() => setCopied(false), 2200);
   };
 
+  const reportStranger = useCallback(async (
+    reason: "spam" | "scam" | "harassment" | "unsafe",
+  ) => {
+    if (!room || room.kind !== "random" || !room.partnerPublicId || !clientId) {
+      return false;
+    }
+    try {
+      await requestJson(`/api/rooms/${room.id}/report`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${clientId}` },
+        body: JSON.stringify({ targetPublicId: room.partnerPublicId, reason }),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [clientId, room]);
+
+  const toggleRememberRandom = useCallback(() => {
+    if (!room || room.kind !== "random") return;
+    const conversation = loadLocalConversations().find((item) => item.roomId === room.id);
+    const next = setLocalRandomHistoryPreference(
+      room.id,
+      !conversation?.rememberRandomHistory,
+    );
+    setConversations(next);
+  }, [room]);
+
+  const deleteHistory = useCallback((conversation: LocalConversation) => {
+    const next = deleteLocalConversation(conversation.roomId);
+    setConversations(next);
+    if (room?.id === conversation.roomId) {
+      setRoom(null);
+      setMessages([]);
+      setClientId("");
+      setScreen("home");
+      router.push("/");
+    }
+  }, [room?.id, router]);
+
   const openLocalChat = useCallback((conversation: LocalConversation) => {
     if (room?.id === conversation.roomId) return;
     openedRoomId.current = null;
@@ -1309,11 +1466,11 @@ export default function ChatApp({ initialRoomId }: { initialRoomId?: string }) {
     return <div className="min-h-screen bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} /><main className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
   }
 
-  if (screen === "matching") return <MatchingScreen onCancel={cancelSearch} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} />;
+  if (screen === "matching") return <MatchingScreen onCancel={cancelSearch} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} partnerTyping={partnerTyping} safetyCode={safetyCode} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
+    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={setDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
   }
 
-  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} />;
+  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} />;
 }
