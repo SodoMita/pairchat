@@ -1,6 +1,6 @@
 # Luma — anonymous text chat roulette
 
-> **Preview:** https://3000-io40uhrizojih3yoqtvun.e2b.app
+> **Preview:** https://3000-irg6ywjwccjioz79twfhd.e2b.app
 
 Luma is a calm, anonymous one-to-one text chat. Meet a random stranger in seconds or create a
 private invite link for exactly one friend. No profiles, no accounts, no images or calls.
