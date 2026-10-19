@@ -43,7 +43,7 @@ export async function readLimitedJson(
 
 export function bearerCredential(request: NextRequest) {
   const authorization = request.headers.get("authorization");
-  const match = authorization?.match(/^Bearer ([A-Za-z0-9_-]{8,100})$/u);
+  const match = authorization?.match(/^Bearer ([A-Za-z0-9_-]{26,100})$/u);
   return match?.[1] ?? null;
 }
 

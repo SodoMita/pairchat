@@ -1,6 +1,9 @@
 # Luma — anonymous text chat roulette
 
-> **Preview:** https://3000-irg6ywjwccjioz79twfhd.e2b.app
+> **Preview:** https://3000-ihhtk1d3mai8man53rpj5.e2b.app
+
+The live host changes when the sandbox restarts. The repository itself stays at
+https://github.com/SodoMita/pairchat
 
 Luma is a calm, anonymous one-to-one text chat. Meet a random stranger in seconds or create a
 private invite link for exactly one friend. No profiles, no accounts, no images or calls.

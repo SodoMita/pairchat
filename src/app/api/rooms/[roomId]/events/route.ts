@@ -88,6 +88,7 @@ export async function GET(
         }
       };
 
+      controller.enqueue(encoder.encode(`retry: 1000\n: ${" ".repeat(2048)}\n: encrypted-relay-connected\n\n`));
       const unsubscribe = subscribeToChatMessages(roomId, accessHash, send);
       const close = () => {
         if (closed) return;
@@ -103,7 +104,6 @@ export async function GET(
       };
       cleanup = close;
       request.signal.addEventListener("abort", close, { once: true });
-      controller.enqueue(encoder.encode("retry: 1000\n: encrypted-relay-connected\n\n"));
 
       heartbeat = setInterval(() => {
         if (!closed) {

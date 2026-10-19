@@ -37,7 +37,7 @@ function signChallenge(parts: Omit<AdmissionChallenge, "signature">) {
     .digest("hex");
 }
 
-export function issueAdmissionChallenge(sessionHash: string, difficulty = 18): AdmissionChallenge {
+export function issueAdmissionChallenge(sessionHash: string, difficulty = 12): AdmissionChallenge {
   const parts: Omit<AdmissionChallenge, "signature"> = {
     version: CHALLENGE_VERSION,
     sessionHash,

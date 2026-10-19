@@ -718,7 +718,6 @@ function ChatScreen({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const localConversation = conversations.find((item) => item.roomId === room.id);
   const [confirmAction, setConfirmAction] = useState<"leave" | "next" | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -849,8 +848,7 @@ function ChatScreen({
                   ) : (
                     <div className="space-y-4">
                       {messages.map((message) => {
-                        const mine = message.senderPublicId === room.participantPublicId ||
-                          (!message.senderPublicId && message.senderClientId === localConversation?.clientId);
+                        const mine = message.senderPublicId === room.participantPublicId;
                         return (
                           <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`}>
                             {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
@@ -885,8 +883,7 @@ function ChatScreen({
                   )}
                   <div className="space-y-4 pt-4">
                     {messages.map((message) => {
-                      const mine = message.senderPublicId === room.participantPublicId ||
-                          (!message.senderPublicId && message.senderClientId === localConversation?.clientId);
+                      const mine = message.senderPublicId === room.participantPublicId;
                       return (
                         <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`}>
                           {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
@@ -989,11 +986,18 @@ export default function ChatApp() {
   const [notice, setNotice] = useState("");
   const [guideAcknowledged, setGuideAcknowledged] = useState(false);
   const openedRoomId = useRef<string | null>(null);
+  const searchCrypto = useRef<ConversationEncryption | null>(null);
+  const searchInFlight = useRef(false);
+  const roomRef = useRef<RoomSnapshot | null>(null);
   const matchedSoundRoom = useRef<string | null>(null);
   const endedSoundRoom = useRef<string | null>(null);
   const typingTimer = useRef<number | undefined>(undefined);
   const lastTypingSignal = useRef(0);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   useEffect(() => {
     setSoundOn(isSoundEnabled());
@@ -1209,8 +1213,10 @@ export default function ChatApp() {
     setBusy(true);
     setError("");
     setScreen("matching");
+    searchInFlight.current = true;
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
+      searchCrypto.current = encryption;
       const data = await requestMatch(participantId, abuseSession, {
         publicKey: serializePublicKey(encryption),
         signingKey: serializeSigningKey(encryption),
@@ -1222,6 +1228,7 @@ export default function ChatApp() {
       playSound("error");
       setScreen("home");
     } finally {
+      searchInFlight.current = false;
       setBusy(false);
     }
   }, [abuseSession, acceptRoom, t]);
@@ -1351,22 +1358,51 @@ export default function ChatApp() {
   }, [acceptRoom, initialRoomId, storageReady]);
 
   useEffect(() => {
-    if (screen !== "matching" || !clientId) return;
-    const poll = window.setInterval(async () => {
-      // Queue polling is the only fast loop, and it stops when the tab is hidden.
-      if (document.visibilityState !== "visible") return;
+    if (screen !== "matching" || !clientId || !abuseSession) return;
+    let stopped = false;
+    const tick = async () => {
+      if (stopped || searchInFlight.current) return;
       try {
         const data = await requestJson<{ room: RoomSnapshot | null }>(
           "/api/match",
           { headers: { Authorization: `Bearer ${clientId}` } },
         );
-        if (data.room) acceptRoom(data.room, clientId);
+        if (stopped) return;
+        if (data.room && data.room.status !== "waiting") {
+          acceptRoom(data.room, clientId);
+          return;
+        }
+        if (!data.room && roomRef.current?.status === "waiting") {
+          const encryption = searchCrypto.current;
+          if (!encryption) return;
+          searchInFlight.current = true;
+          try {
+            const matched = await requestMatch(clientId, abuseSession, {
+              publicKey: serializePublicKey(encryption),
+              signingKey: serializeSigningKey(encryption),
+            });
+            if (!stopped) acceptRoom(matched.room, clientId, encryption);
+          } catch {
+            if (!stopped) {
+              setNotice(t("couldNotStart"));
+              playSound("error");
+              setScreen("home");
+            }
+          } finally {
+            searchInFlight.current = false;
+          }
+        }
       } catch {
         // A temporary polling issue should not end the queue.
       }
-    }, 1500);
-    return () => window.clearInterval(poll);
-  }, [acceptRoom, clientId, screen]);
+    };
+    void tick();
+    const poll = window.setInterval(() => void tick(), 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(poll);
+    };
+  }, [abuseSession, acceptRoom, clientId, screen, t]);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId) return;
@@ -1629,8 +1665,10 @@ export default function ChatApp() {
     setClientId(participantId);
     setScreen("matching");
     setBusy(true);
+    searchInFlight.current = true;
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
+      searchCrypto.current = encryption;
       const data = await requestMatch(participantId, abuseSession, {
         publicKey: serializePublicKey(encryption),
         signingKey: serializeSigningKey(encryption),
@@ -1640,6 +1678,7 @@ export default function ChatApp() {
       setError(t("nextError"));
       setScreen("error");
     } finally {
+      searchInFlight.current = false;
       setBusy(false);
     }
   }, [abuseSession, acceptRoom, leaveRoom, t]);

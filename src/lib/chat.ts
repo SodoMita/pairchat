@@ -25,9 +25,11 @@ export function createRoomId(kind: RoomKind) {
 }
 
 export function isValidClientId(value: unknown): value is string {
+  // 26 characters from a 64-symbol alphabet is about 156 bits, so the
+  // unsalted SHA-256 stored at rest does not depend on the client being polite.
   return (
     typeof value === "string" &&
-    value.length >= 8 &&
+    value.length >= 26 &&
     value.length <= 100 &&
     /^[a-zA-Z0-9_-]+$/.test(value)
   );

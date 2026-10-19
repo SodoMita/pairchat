@@ -7,9 +7,7 @@ export const MAX_LOCAL_MESSAGES = 500;
 export type LocalChatMessage = {
   id: string;
   body: string;
-  senderPublicId?: string;
-  /** Legacy local-only transcript field; never sent over the network. */
-  senderClientId?: string;
+  senderPublicId: string;
   createdAt: string;
   delivery?: "sent" | "delivered";
 };
@@ -42,8 +40,7 @@ function isMessage(value: unknown): value is LocalChatMessage {
   return (
     typeof message.id === "string" &&
     typeof message.body === "string" &&
-    (typeof message.senderPublicId === "string" ||
-      typeof message.senderClientId === "string") &&
+    typeof message.senderPublicId === "string" &&
     typeof message.createdAt === "string" &&
     (message.delivery === undefined ||
       message.delivery === "sent" ||
@@ -99,14 +96,41 @@ function isConversation(value: unknown): value is LocalConversation {
   );
 }
 
+function stripLegacyCredentials(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const conversation = value as { messages?: unknown[] };
+  if (!Array.isArray(conversation.messages)) return value;
+  return {
+    ...conversation,
+    messages: conversation.messages.map((message) => {
+      if (!message || typeof message !== "object") return message;
+      const { senderClientId: _dropped, ...rest } = message as { senderClientId?: string };
+      return rest;
+    }),
+  };
+}
+
 export function loadLocalConversations(): LocalConversation[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_CHATS_KEY) ?? "[]") as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
+    const raw = JSON.parse(window.localStorage.getItem(LOCAL_CHATS_KEY) ?? "[]") as unknown;
+    if (!Array.isArray(raw)) return [];
+    const hadLegacyCredential = raw.some((item) => {
+      if (!item || typeof item !== "object") return false;
+      const messages = (item as { messages?: unknown[] }).messages;
+      return Array.isArray(messages) && messages.some((message) => {
+        if (!message || typeof message !== "object") return false;
+        return "senderClientId" in message;
+      });
+    });
+    const stripped = raw.map(stripLegacyCredentials);
+    const conversations = stripped
       .filter(isConversation)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    if (hadLegacyCredential || conversations.length !== raw.length) {
+      writeLocalConversations(conversations);
+    }
+    return conversations;
   } catch {
     return [];
   }
