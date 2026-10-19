@@ -1,6 +1,7 @@
 import { translationCompletionsA } from "./i18n-completion-a";
 import { translationCompletionsB } from "./i18n-completion-b";
 import { translationCompletionsC } from "./i18n-completion-c";
+import { translationCompletionsD } from "./i18n-completion-d";
 
 export const languages = [
   { code: "en", name: "English", dir: "ltr" },
@@ -164,8 +165,53 @@ const en = {
   guideAccept: "I understand — start chatting",
   guideAcceptAria: "Confirm you have read the safety guide",
   guideFootnote: "Luma cannot read or review end-to-end encrypted messages. Reports only add temporary matching friction; they do not create a human-reviewed case. Take breaks, and talk only about what you're comfortable sharing.",
+  guideWhyLabel: "Why it happens",
+  guideConsequenceLabel: "What it can lead to",
+  guideReasoningLabel: "What is actually going on",
+  guideExpand: "Read the explanation",
+  guideCollapse: "Hide the explanation",
   couldNotStart: "Could not start a conversation right now. Please try again in a moment.",
   yourChatsEmpty: "No conversations yet. Met strangers and invites you keep will appear here.",
+  guideIntro: "Anonymous chat is unpredictable. Most sessions go fine, but the situations below come up regularly. The goal is to explain why a response matters, not to lecture; the choices are still yours.",
+  guideGhostingWhy: "Why it happens",
+  guideGhostingConsequence: "What it can lead to",
+  guideGhostingReasoning: "No one is owed a goodbye in a stranger match. Sending more messages will not get a reply that isn't coming, and it usually makes the mood worse for both sides. The most useful response is to take a short break before matching again.",
+  guideScamWhy: "Why it happens",
+  guideScamConsequence: "What it can lead to",
+  guideScamReasoning: "Even a small reply identifies the account as real and reachable. A legitimate stranger never needs your money, wallet seed, verification code, or card number. Leaving and sending a content-free report is the only safe response.",
+  guideHarassWhy: "Why it happens",
+  guideHarassConsequence: "What it can lead to",
+  guideHarassReasoning: "Retaliation usually escalates the situation, and the conversation keeps both people in a harmful state longer. Luma is anonymous, text-only, and ends the moment you end it. Save what you need before leaving, then report. Threats of violence are a matter for local police.",
+  guideSexualWhy: "Why it happens",
+  guideSexualConsequence: "What it can lead to",
+  guideSexualReasoning: "Continuing to engage often raises the pressure rather than lowering it. A single \"no\" is enough; you are not required to explain. Leaving is the strongest signal and a report adds temporary friction to the partner's matching.",
+  guidePrivacyWhy: "Why it happens",
+  guidePrivacyConsequence: "What it can lead to",
+  guidePrivacyReasoning: "Once a phone number, photo or social handle is sent, the other person controls it forever and none of Luma's safety boundaries apply. Luma will never ask you to move to a different app; if anyone does, that is a sign to leave.",
+  guideSpamWhy: "Why it happens",
+  guideSpamConsequence: "What it can lead to",
+  guideSpamReasoning: "Any reply confirms the account is live and worth targeting. Never open links or download files from a stranger. A report-as-spam plus a new match takes a few seconds and removes the bot's attention reward.",
+  guideMinorWhy: "Why it happens",
+  guideMinorConsequence: "What it can lead to",
+  guideMinorReasoning: "Open chat includes people in crisis and people who should not be on it at all. Continuing the conversation, even with good intentions, usually makes the situation worse. Leave, report, and contact local emergency services when there is immediate risk.",
+  guideConsentWhy: "Why it happens",
+  guideConsentConsequence: "What it can lead to",
+  guideConsentReasoning: "Once a message is sent, it can be screenshotted and shared outside the chat. Treat every message as if it could become public; ask before quoting someone, and remember that ending a chat cannot erase what the other person already saved.",
+  guideSwearTitle: "Swearing, insults, and crude language",
+  guideSwearWhy: "Why it happens",
+  guideSwearConsequence: "What it can lead to",
+  guideSwearReasoning: "Anonymous text lowers the social cost of strong language. A one-off \"damn\" or \"hell\" is not a safety issue. A stream of personal insults is closer to harassment and is what the report flow exists for. You decide what is acceptable in your chat; leaving is faster and more effective than trying to moderate the other person.",
+  guidePatternTitle: "The patterns that follow",
+  guidePattern1Title: "Stopping a reply is the strongest signal",
+  guidePattern1Copy: "Engaging rewards the other side whether they are a bot, a scammer, or someone having a bad day. A silent end is not rude.",
+  guidePattern2Title: "Local history is local",
+  guidePattern2Copy: "Whatever was screenshotted on the other side cannot be unscreenshotted. The \"Keep this stranger chat\" option controls only your device.",
+  guidePattern3Title: "A report is content-free",
+  guidePattern3Copy: "The relay never sees the message text; a report is just a reason code that adds temporary friction to the partner's matching. Sending one costs nothing.",
+  guidePattern4Title: "The system can be wrong, and so can you",
+  guidePattern4Copy: "Treat every match as an unverified stranger — and extend the same grace to your own behaviour.",
+  guidePattern5Title: "Breaks help",
+  guidePattern5Copy: "Doom-matching is exhausting. Closing the tab is allowed at any time, for any reason.",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -447,6 +493,7 @@ const translationCompletions = [
   translationCompletionsA,
   translationCompletionsB,
   translationCompletionsC,
+  translationCompletionsD,
 ].reduce<Partial<Record<LanguageCode, Dictionary>>>((merged, source) => {
   for (const [code, dictionary] of Object.entries(source) as [LanguageCode, Dictionary][]) {
     merged[code] = { ...merged[code], ...dictionary };

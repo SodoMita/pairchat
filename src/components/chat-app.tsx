@@ -406,24 +406,52 @@ function HomeScreen({
     [LockKeyhole, t("privateTitle"), t("privateCopy")],
     [Link2, t("linkTitle"), t("linkCopy")],
   ] as const;
-  const guideItems = [
-    [Users, t("guideGhostingTitle"), t("guideGhostingCopy")],
-    [Wallet, t("guideScamTitle"), t("guideScamCopy")],
-    [AlertTriangle, t("guideHarassTitle"), t("guideHarassCopy")],
-    [Ban, t("guideSexualTitle"), t("guideSexualCopy")],
-    [LockKeyhole, t("guidePrivacyTitle"), t("guidePrivacyCopy")],
-    [Link2, t("guideSpamTitle"), t("guideSpamCopy")],
-    [Heart, t("guideMinorTitle"), t("guideMinorCopy")],
-    [MessageCircle, t("guideConsentTitle"), t("guideConsentCopy")],
-  ] as const;
+  type GuideTopic = {
+    icon: typeof Users;
+    title: string;
+    why: string;
+    consequence: string;
+    reasoning: string;
+    topicKey: string;
+  };
+  const buildGuideTopic = (icon: typeof Users, title: string, key: string): GuideTopic => ({
+    icon,
+    title,
+    why: t(`guide${key}Why` as TranslationKey),
+    consequence: t(`guide${key}Consequence` as TranslationKey),
+    reasoning: t(`guide${key}Reasoning` as TranslationKey),
+    topicKey: key,
+  });
+  const allGuideTopics: GuideTopic[] = [
+    buildGuideTopic(Users, t("guideGhostingTitle"), "Ghosting"),
+    buildGuideTopic(Wallet, t("guideScamTitle"), "Scam"),
+    buildGuideTopic(AlertTriangle, t("guideHarassTitle"), "Harass"),
+    buildGuideTopic(Ban, t("guideSexualTitle"), "Sexual"),
+    buildGuideTopic(LockKeyhole, t("guidePrivacyTitle"), "Privacy"),
+    buildGuideTopic(Link2, t("guideSpamTitle"), "Spam"),
+    buildGuideTopic(Heart, t("guideMinorTitle"), "Minor"),
+    buildGuideTopic(MessageCircle, t("guideConsentTitle"), "Consent"),
+  ];
   const [showAllGuide, setShowAllGuide] = useState(false);
-  const visibleGuideItems = showAllGuide ? guideItems : guideItems.slice(0, 6);
-  const guideSteps = [
-    [MessageCircle, t("guideStep1")],
-    [Flag, t("guideStep2")],
-    [LogOut, t("guideStep3")],
-    [Heart, t("guideStep4")],
-  ] as const;
+  const [expandedTopic, setExpandedTopic] = useState<string | null>(null);
+  const visibleGuideTopics = showAllGuide ? allGuideTopics : allGuideTopics.slice(0, 4);
+
+  const swearTopic: GuideTopic = {
+    icon: MessageCircle,
+    title: t("guideSwearTitle"),
+    why: t("guideSwearWhy"),
+    consequence: t("guideSwearConsequence"),
+    reasoning: t("guideSwearReasoning"),
+    topicKey: "Swear",
+  };
+
+  const patterns = [
+    { title: t("guidePattern1Title"), copy: t("guidePattern1Copy") },
+    { title: t("guidePattern2Title"), copy: t("guidePattern2Copy") },
+    { title: t("guidePattern3Title"), copy: t("guidePattern3Copy") },
+    { title: t("guidePattern4Title"), copy: t("guidePattern4Copy") },
+    { title: t("guidePattern5Title"), copy: t("guidePattern5Copy") },
+  ];
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#f8f6f0]">
@@ -492,17 +520,47 @@ function HomeScreen({
               <BookOpen size={13} className="text-[#ff6747]" /> {t("guideEyebrow")}
             </div>
             <h2 className="mt-5 text-[clamp(1.9rem,4vw,3.15rem)] font-extrabold leading-[1.05] tracking-[-0.05em] text-[#1e2927]">{t("guideTitle")}</h2>
-            <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideCopy")}</p>
+            <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <div className="mt-9 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleGuideItems.map(([ItemIcon, title, copy]) => (
-              <article key={title} className="group rounded-2xl border border-[#e7e6df] bg-white/80 p-5 transition hover:-translate-y-0.5 hover:border-[#f0c5b7] hover:bg-white hover:shadow-[0_14px_34px_rgba(50,58,55,0.07)]">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]"><ItemIcon size={18} /></span>
-                <h3 className="mt-4 text-[13px] font-extrabold text-[#2b3733]">{title}</h3>
-                <p className="mt-2 text-[11.5px] leading-5 text-[#7c8581]">{copy}</p>
-              </article>
-            ))}
+          <div className="mt-9 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-2">
+            {[...visibleGuideTopics, swearTopic].map((topic) => {
+              const ItemIcon = topic.icon;
+              const open = expandedTopic === topic.topicKey;
+              return (
+                <article key={topic.topicKey} className="overflow-hidden rounded-2xl border border-[#e7e6df] bg-white/80 transition hover:border-[#f0c5b7] hover:bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedTopic(open ? null : topic.topicKey)}
+                    aria-expanded={open}
+                    className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-4 text-start"
+                  >
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]"><ItemIcon size={18} /></span>
+                    <span className="min-w-0">
+                      <h3 className="text-[13px] font-extrabold text-[#2b3733]">{topic.title}</h3>
+                      <p className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-[#a0a6a3]">{open ? t("guideCollapse") : t("guideExpand")}</p>
+                    </span>
+                    <ChevronRight size={16} className={`text-[#ff6747] transition-transform rtl:rotate-180 ${open ? "rotate-90" : ""}`} />
+                  </button>
+                  {open && (
+                    <div className="space-y-3 border-t border-[#ecede6] bg-[#fcfaf6] p-5 text-[11.5px] leading-5 text-[#3a4541]">
+                      <div>
+                        <p className="font-extrabold text-[#27322f]">{t("guideWhyLabel")}</p>
+                        <p className="mt-1 text-[11px] text-[#65716c]">{topic.why}</p>
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-[#27322f]">{t("guideConsequenceLabel")}</p>
+                        <p className="mt-1 text-[11px] text-[#65716c]">{topic.consequence}</p>
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-[#27322f]">{t("guideReasoningLabel")}</p>
+                        <p className="mt-1 text-[11px] text-[#65716c]">{topic.reasoning}</p>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
           {!showAllGuide && (
             <button
@@ -514,17 +572,17 @@ function HomeScreen({
             </button>
           )}
 
-          <div className="mt-6 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
-            <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start">
-              <h3 className="text-[19px] font-extrabold leading-7 tracking-[-0.03em] text-[#2a3531]">{t("guideStepsTitle")}</h3>
-              <ol className="grid gap-2.5 sm:grid-cols-2">
-                {guideSteps.map(([StepIcon, label], index) => (
-                  <li key={label} className="flex items-start gap-2.5 rounded-xl bg-white/85 px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#5a6661]">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[#e9f1e3] text-[#5c7d54]"><StepIcon size={12} /></span>
-                    <span><span className="me-1 text-[9px] font-extrabold text-[#9aa79f]">{index + 1}.</span>{label}</span>
-                  </li>
+          <div className="mt-8 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
+            <div className="p-6 sm:p-8">
+              <h3 className="text-[18px] font-extrabold leading-7 tracking-[-0.03em] text-[#2a3531]">{t("guidePatternTitle")}</h3>
+              <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                {patterns.map((pattern) => (
+                  <div key={pattern.title} className="rounded-xl bg-white/85 p-3.5">
+                    <p className="text-[12px] font-extrabold text-[#27322f]">{pattern.title}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-[#5a6661]">{pattern.copy}</p>
+                  </div>
                 ))}
-              </ol>
+              </div>
             </div>
             <p className="border-t border-[#e1e6da] px-6 py-4 text-[10.5px] leading-5 text-[#7d887f] sm:px-8">{t("guideFootnote")}</p>
           </div>
