@@ -5,14 +5,37 @@ import {
   subscribeToChatMessages,
   type LiveChatEvent,
 } from "@/lib/chat-events";
-
-const MAX_STREAMS_PER_PARTICIPANT = 4;
 import { isValidClientId, isValidRoomId } from "@/lib/chat";
 import { allowRequest } from "@/lib/rate-limit";
 import { bearerCredential, requestClientAddress } from "@/lib/request-security";
 import { hashAccessCredential } from "@/lib/server-credentials";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+const MAX_STREAMS_PER_PARTICIPANT = 4;
+const STREAM_PADDING = " ".repeat(2048);
+
+function eventPayload(event: LiveChatEvent) {
+  switch (event.type) {
+    case "message":
+      return event.message;
+    case "peer":
+      return { connected: event.connected };
+    case "typing":
+      return {
+        senderAccessHash: event.senderAccessHash,
+        senderPublicId: event.senderPublicId,
+        active: event.active,
+      };
+    case "ack":
+      return {
+        messageId: event.messageId,
+        recipientPublicId: event.recipientPublicId,
+        receivedAt: event.receivedAt,
+        signature: event.signature,
+      };
+  }
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,37 +82,32 @@ export async function GET(
       let closed = false;
       let heartbeat: ReturnType<typeof setInterval> | undefined;
 
-       const send = (event: LiveChatEvent) => {
-         if (closed) return;
-         try {
-           const payload =
-             event.type === "message"
-               ? event.message
-               : event.type === "peer"
-                 ? { connected: event.connected }
-                 : event.type === "typing"
-                   ? {
-                       senderAccessHash: event.senderAccessHash,
-                       senderPublicId: event.senderPublicId,
-                       active: event.active,
-                     }
-                   : {
-                       messageId: (event as any).messageId,
-                       recipientPublicId: (event as any).recipientPublicId,
-                       receivedAt: (event as any).receivedAt,
-                       signature: (event as any).signature,
-                     };
-           const id = event.type === "message" ? `id: ${(event as any).message.id}\n` : "";
-           controller.enqueue(
-             encoder.encode(
-               `${id}event: ${event.type}\ndata: ${JSON.stringify(payload)}\n\n`,
-             ),
-           );
-         } catch {
-           cleanup();
-         }
-       };
+      const touchPresence = () => {
+        void db
+          .update(chatParticipants)
+          .set({ lastSeenAt: new Date() })
+          .where(eq(chatParticipants.id, membership.id))
+          .catch(() => undefined);
+      };
 
+      const send = (event: LiveChatEvent) => {
+        if (closed) return;
+        try {
+          const payload = eventPayload(event);
+          const id = event.type === "message" ? `id: ${event.message.id}\n` : "";
+          controller.enqueue(
+            encoder.encode(
+              `${id}event: ${event.type}\ndata: ${JSON.stringify(payload)}\n\n`,
+            ),
+          );
+        } catch {
+          cleanup();
+        }
+      };
+
+      controller.enqueue(
+        encoder.encode(`retry: 1000\n: ${STREAM_PADDING}\n: encrypted-relay-connected\n\n`),
+      );
       const unsubscribe = subscribeToChatMessages(roomId, accessHash, send);
       const close = () => {
         if (closed) return;
@@ -105,17 +123,18 @@ export async function GET(
       };
       cleanup = close;
       request.signal.addEventListener("abort", close, { once: true });
-      controller.enqueue(encoder.encode("retry: 1000\n: encrypted-relay-connected\n\n"));
+      touchPresence();
 
       heartbeat = setInterval(() => {
         if (!closed) {
           try {
-            controller.enqueue(encoder.encode(": heartbeat\n\n"));
+            touchPresence();
+            controller.enqueue(encoder.encode(`: heartbeat${STREAM_PADDING}\n\n`));
           } catch {
             close();
           }
         }
-      }, 15_000);
+      }, 10_000);
     },
     cancel() {
       cleanup();

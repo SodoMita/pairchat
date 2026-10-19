@@ -1,223 +1,79 @@
-# Luma - Anonymous Chat Roulette
+# Luma
 
-A calm, anonymous place for one-to-one text conversations with strangers or friends by private invite.
+Anonymous one-to-one text chat. No account, no profile, no message stored on the server.
 
-## Features
+Live preview: https://3000-ikfnas0k27xmw7arg1f83.e2b.app
 
-- **Anonymous by design**: No names, emails, profiles, or permanent identity
-- **End-to-end encrypted**: Messages are encrypted in the browser before being sent
-- **Text-only**: Simple, focused conversations
-- **Leave anytime**: You can end any conversation when you choose
-- **Private links**: Create a private room and invite exactly one friend
+Deploy the same repo on E2B: https://e2b.dev/deploy?repo=https://github.com/SodoMita/pairchat
 
-## Quick Start
+The preview address can change when the sandbox restarts. The repository link above stays valid.
 
-### Local Development
+## What this is
+
+Two people get a text box. Stranger chat pairs whoever is waiting. A private link is a room for one other person, with the key kept in the URL fragment so the server never receives it. Messages are encrypted in the browser. The relay can see timing and ciphertext length, not the words.
+
+History stays in the browser. Stranger chats are dropped from this device when they end, unless that chat is explicitly kept.
+
+## What usually happens in random anonymous chats
+
+This is a description of the situation, not a list of orders. People already know they can leave. What is less obvious is what follows from staying, answering, or leaving.
+
+### The other person disappears
+
+A lot of chats end in the middle of a sentence. Sometimes the network dropped. Sometimes they got what they wanted, or nothing they wanted, and closed the tab. The consequence of reading that as a verdict on you is that the next chat starts already defensive. The consequence of treating it as the format is smaller: that transcript is over, and the next person is not the previous one. Nothing in the product tells you which of those causes it was.
+
+### Swearing
+
+Swearing shows up in a few different shapes, and they do not have the same aftermath.
+
+Some people swear the way they talk. The words are rough and the subject is ordinary. Answering in the same register often just continues the conversation. Matching their volume does not, by itself, turn the chat into a fight.
+
+Some swearing is aimed. It is about you, your silence, your boundary, or a group you were assumed to belong to. Answering that kind often has a specific consequence: the chat becomes a contest, and the other person now has a longer sample of how you react. Leaving has a different consequence. The chat ends for both of you, they may be annoyed, and anything already on their screen can still be copied. There is no middle outcome where the words are unsent.
+
+A safety signal does not summon someone to read the transcript. It does not delete their copy. It can make their next stranger matches slower for a while. That is the whole effect. If the swearing was casual, that friction is a cost they did not necessarily earn. If it was aimed, the friction is still only friction.
+
+### Cruelty, sexual pressure, and demands
+
+Some chats move quickly from hello to a demand: a photo, a sexual script, an insult if you decline, a test of whether you will stay. Replying with an explanation often becomes the next thing they argue with. The consequence is more time in the chat, not a negotiated peace. Leaving ends your side. It does not make them kinder in the next room, and it does not erase what you already typed. A safety signal adds temporary matching friction for their browser session. It is not a case file and nobody reviews the messages, because the server cannot read them.
+
+### Spam, bots, and people fishing for a reply
+
+Repeated lines, links, or a script that ignores what you said are usually looking for any response. A reply is evidence that a human is on the other side, which is the thing the script was measuring. Silence plus ending the chat withholds that evidence. Reporting it as spam can slow that session's later matches. It will not identify a person, because there is no account behind the session.
+
+### Money, codes, and personal details
+
+Encryption hides the sentence from the server. It does not hide it from the other person. A bank code, a login code, a photo of an ID, a phone number, or a city small enough to find someone are still in their browser after you send them. Ending the chat does not pull that back. Keeping the chat does not make them more trustworthy. The safety code only tells you that the keys were not swapped by the relay if you compare it somewhere else. It says nothing about whether the person will ask you for money five messages later.
+
+Impersonation works here because there is no profile to check. Someone can claim a job, an age, a crisis, or a platform role. The consequence of believing it is that you act on a sentence from an anonymous tab. The consequence of not believing it is that a real person in trouble gets a shorter conversation. The product cannot tell those apart.
+
+### Awkwardness and silence
+
+A pause is often just someone typing, or deciding to leave. Filling every pause has the consequence of doing the whole conversation yourself. A short boundary ("I don't want to talk about that") sometimes redirects the chat and sometimes becomes the topic. Either result is information. You do not get a record of it on the server, and they may keep one locally if they chose to.
+
+### Language
+
+The language menu changes your interface, not the other person's. If you cannot read each other, the chat stalls. Translation tools outside Luma mean pasting their words into another site, which is another copy of the conversation. Staying in a chat you cannot read mostly produces more unread text.
+
+### The search itself
+
+A waiting search used to die after a short silence, while the screen still said it was looking. A second tab in the same browser was rejected outright, so two windows could not meet. After a few skips, a proof-of-work check was hard enough that the browser often failed it, and the next match never started. Those are fixed: a live search stays in the queue, a vanished search is started again, a second tab can join the waiting person if nobody else is there, and the admission check is small enough to finish. If the other side never opens the live connection, the chat does not sit on "Connecting" forever.
+
+## Run locally
+
+PostgreSQL must be reachable at `DATABASE_URL` in `.env`.
 
 ```bash
-# Clone the repository
-git clone https://github.com/SodoMita/pairchat.git
-cd pairchat
-
-# Install dependencies
 npm install
-
-# Set up database
-# Make sure you have PostgreSQL running
-# Update DATABASE_URL in .env file
-
-# Apply database schema
 npx drizzle-kit push
-
-# Start the development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+The app also creates the tables on startup if they are missing. `npx drizzle-kit push` remains the explicit schema path.
 
-### Production
+## Sounds
 
-```bash
-npm run build
-npm start
-```
-
-## Common Problems in Random Anonymous Chats
-
-Anonymous chat platforms can be wonderful for meeting new people, but they also come with unique challenges. Here's what to expect and how to handle common situations:
-
-### 1. **Trolls and Harassment**
-
-**What happens**: Some users may send offensive, inappropriate, or harassing messages.
-
-**How to react**: 
-- **Don't engage**: Don't respond or argue. This often encourages them.
-- **End the chat immediately**: Use the "End chat" button to disconnect.
-- **Report**: Use the "Report" button to send a safety signal. This helps reduce future matches with that user.
-- **Block and move on**: After ending, start a new chat with someone else.
-
-**Prevention**: The platform has rate limits and abuse detection, but no system is perfect. Your best protection is ending unwanted conversations quickly.
-
-### 2. **Spam and Bots**
-
-**What happens**: Automated messages, repeated text, or nonsensical content.
-
-**How to react**:
-- **Don't respond**: Bots often look for engagement.
-- **End the chat**: Use the "End & find next" button to quickly move to a new conversation.
-- **Report**: Use the "Spam or automation" report option.
-
-**Prevention**: The platform includes proof-of-work challenges to deter simple bots, but sophisticated ones may still get through.
-
-### 3. **Scams and Phishing**
-
-**What happens**: Users asking for personal information, money, passwords, or to click on links.
-
-**How to react**:
-- **NEVER share**: Personal information, financial details, passwords, or verification codes.
-- **Don't click links**: Even if they seem harmless.
-- **End immediately**: If someone asks for anything suspicious.
-- **Report**: Use the "Scam or impersonation" option.
-
-**Remember**: This is an anonymous platform. Anyone asking for identifying information is violating the spirit of the service and likely has malicious intent.
-
-### 4. **Awkward or Uncomfortable Conversations**
-
-**What happens**: The conversation takes an uncomfortable turn, becomes too personal, or makes you uneasy.
-
-**How to react**:
-- **Set boundaries**: Politely but firmly state what you're comfortable with.
-- **Change the subject**: Redirect to a different topic.
-- **End the chat**: You have the right to leave any conversation at any time, for any reason.
-- **No explanation needed**: You don't owe anyone a reason for leaving.
-
-**Prevention**: Start with light, general topics. Avoid sharing personal details early on.
-
-### 5. **Language Barriers**
-
-**What happens**: You're matched with someone who speaks a different language.
-
-**How to react**:
-- **Use the language selector**: Both users can select their preferred language.
-- **Be patient**: Try simple phrases or use translation tools.
-- **End politely**: If communication is too difficult, end the chat and try again.
-
-**Prevention**: The platform supports multiple languages, but matches are random across all users.
-
-### 6. **Connection Issues**
-
-**What happens**: Messages don't send, the chat disconnects, or the other person disappears.
-
-**How to react**:
-- **Wait a moment**: Sometimes it's a brief connectivity issue.
-- **Check your connection**: Make sure you're still online.
-- **Refresh**: If the chat is stuck, you may need to start a new one.
-- **Try again later**: If the service is unavailable, wait and try again.
-
-**Prevention**: The platform has automatic reconnection, but network issues on your end will affect your experience.
-
-### 7. **The Other Person Leaves Suddenly**
-
-**What happens**: Your chat partner disconnects without warning.
-
-**How to react**:
-- **Don't take it personally**: People leave for many reasons (bad connection, got busy, changed their mind).
-- **Start a new chat**: Use the "Meet someone new" button.
-- **Move on**: Each conversation is independent.
-
-**Remember**: This is the nature of anonymous, ephemeral conversations. Not every chat will last.
-
-## Safety Guidelines
-
-### Do:
-- ✅ Keep conversations light and respectful
-- ✅ End chats that make you uncomfortable
-- ✅ Report abusive behavior
-- ✅ Protect your privacy
-- ✅ Assume good faith initially
-
-### Don't:
-- ❌ Share personal information (name, location, phone, email, etc.)
-- ❌ Share financial information or passwords
-- ❌ Send harassing or abusive messages
-- ❌ Click on suspicious links
-- ❌ Continue conversations that make you uncomfortable
-
-## Technical Details
-
-### Encryption
-
-- All messages are encrypted end-to-end using AES-256-GCM
-- Each conversation has unique encryption keys
-- The server cannot read message content
-- Keys are generated in your browser and never sent to the server
-
-### Privacy
-
-- No personal data is collected
-- No accounts or registration required
-- Conversations are not stored on the server
-- Local chat history is stored only in your browser
-
-### Rate Limiting
-
-- Each IP address is limited to prevent abuse
-- Abuse signals create temporary cooldowns for reported users
-- Proof-of-work challenges prevent simple bot attacks
-
-## Deployment
-
-### Environment Variables
-
-```
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-```
-
-### Docker (Recommended)
-
-```bash
-# Build and run with Docker
-docker-compose up --build
-```
-
-## Contributing
-
-Contributions are welcome! Please read our [Code of Conduct](CODE_OF_CONDUCT.md) and [Contributing Guidelines](CONTRIBUTING.md).
+Message, connect, and disconnect tones are generated in the browser. Browsers block audio until a click or key press, so the tone is armed by the same gesture that starts or sends a chat. The speaker button in the chat mutes them on this device.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## E2B Link
-
-Try this app on E2B (Elastic Cloud):
-
-[![Deploy on E2B](https://img.shields.io/badge/Deploy%20on%20E2B-4a4a4a?style=flat-square&logo=e2b)](https://e2b.dev)
-
-Or deploy with one click:
-- [Deploy to E2B](https://e2b.dev/deploy?repo=https://github.com/SodoMita/pairchat)
-
-## Support
-
-For issues, questions, or feedback:
-- Open an issue on [GitHub](https://github.com/SodoMita/pairchat/issues)
-- Join our [Discord community](https://discord.gg/example)
-
----
-
-## E2B Deployment
-
-Deploy this app instantly on E2B (Elastic Cloud):
-
-[![Deploy on E2B](https://img.shields.io/badge/Deploy%20on%20E2B-4a4a4a?style=flat-square&logo=e2b)](https://e2b.dev)
-
-**Live Preview**: https://3000-i43srskn8ezzrl51oaggx.e2b.app
-
-Or deploy with one click:
-- [Deploy to E2B](https://e2b.dev/deploy?repo=https://github.com/SodoMita/pairchat)
-
----
-
-**Made for small moments of genuine connection.**
+MIT. See [LICENSE](LICENSE). Security limits are described in [SECURITY.md](SECURITY.md).

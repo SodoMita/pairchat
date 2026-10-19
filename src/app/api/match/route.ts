@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   // Normal use gets a quiet budget; bursts must solve a local proof-of-work
   // challenge issued and verified by this server. No third-party scripts.
-  const withinQuietBudget = allowRequest(`match-quiet:${abuseSessionHash}`, 3, 10 * 60_000);
+  const withinQuietBudget = allowRequest(`match-quiet:${abuseSessionHash}`, 24, 10 * 60_000);
   if (!withinQuietBudget) {
     const challengeSolved = verifyAdmissionChallenge(body?.challenge, abuseSessionHash);
     if (!challengeSolved) {
@@ -77,11 +77,17 @@ export async function POST(request: NextRequest) {
   const roomId = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(7402181)`);
     await tx.execute(sql`
-      update chat_rooms
+      update chat_rooms as rooms
       set status = 'ended', ended_at = now(), updated_at = now()
-      where kind = 'random'
-        and status = 'waiting'
-        and updated_at < now() - interval '25 seconds'
+      where rooms.kind = 'random'
+        and rooms.status = 'waiting'
+        and not exists (
+          select 1
+          from chat_participants as waiting_participant
+          where waiting_participant.room_id = rooms.id
+            and waiting_participant.left_at is null
+            and waiting_participant.last_seen_at > now() - interval '90 seconds'
+        )
     `);
     await tx.execute(sql`
       delete from chat_rooms
@@ -144,21 +150,6 @@ export async function POST(request: NextRequest) {
       return "session-cooldown" as const;
     }
 
-    const [sessionWaiting] = await tx
-      .select({ roomId: chatRooms.id })
-      .from(chatParticipants)
-      .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
-      .where(
-        and(
-          eq(chatParticipants.abuseSessionHash, abuseSessionHash),
-          eq(chatRooms.kind, "random"),
-          eq(chatRooms.status, "waiting"),
-          isNull(chatParticipants.leftAt),
-        ),
-      )
-      .limit(1);
-    if (sessionWaiting) return "session-waiting" as const;
-
     const activeRooms = await tx
       .select({ roomId: chatRooms.id })
       .from(chatParticipants)
@@ -185,7 +176,7 @@ export async function POST(request: NextRequest) {
           sql`${chatParticipants.joinedAt} > now() - interval '1 hour'`,
         ),
       );
-    if (recentContacts >= 20) return "contact-budget" as const;
+    if (recentContacts >= 60) return "contact-budget" as const;
 
     const [waiting] = await tx
       .select({ roomId: chatRooms.id })
@@ -205,9 +196,13 @@ export async function POST(request: NextRequest) {
           isNotNull(chatParticipants.publicKey),
           isNotNull(chatParticipants.signingKey),
           ne(chatParticipants.clientId, accessHash),
+          sql`${chatParticipants.lastSeenAt} > now() - interval '45 seconds'`,
         ),
       )
-      .orderBy(asc(chatRooms.createdAt))
+      .orderBy(
+        sql`case when ${chatParticipants.abuseSessionHash} = ${abuseSessionHash} then 1 else 0 end`,
+        asc(chatRooms.createdAt),
+      )
       .limit(1);
 
     if (waiting) {
@@ -225,6 +220,19 @@ export async function POST(request: NextRequest) {
         .where(eq(chatRooms.id, waiting.roomId));
       return waiting.roomId;
     }
+
+    await tx.execute(sql`
+      update chat_rooms
+      set status = 'ended', ended_at = now(), updated_at = now()
+      where kind = 'random'
+        and status = 'waiting'
+        and id in (
+          select room_id
+          from chat_participants
+          where abuse_session_hash = ${abuseSessionHash}
+            and left_at is null
+        )
+    `);
 
     const id = createRoomId("random");
     await tx.insert(chatRooms).values({ id, kind: "random" });

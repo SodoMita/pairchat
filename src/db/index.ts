@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { ensureSchema } from "./ensure";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -22,3 +23,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export const db = drizzle(pool);
+
+void ensureSchema(pool).catch((error) => {
+  console.error("schema ensure failed", error);
+});

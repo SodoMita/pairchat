@@ -28,7 +28,7 @@ import {
   type LanguageCode,
   type TranslationKey,
 } from "@/lib/i18n";
-import { playSound, areSoundsMuted, toggleSounds } from "@/lib/sounds";
+import { installSoundUnlock, playSound, unlockSounds, areSoundsMuted, toggleSounds } from "@/lib/sounds";
 import {
   createParticipantId,
   deleteLocalConversation,
@@ -806,7 +806,25 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
   const [error, setError] = useState("");
   const [soundsMuted, setSoundsMuted] = useState(areSoundsMuted());
   const openedRoomId = useRef<string | null>(null);
+  const searchCrypto = useRef<ConversationEncryption | null>(null);
+  const searchInFlight = useRef(false);
+  const relayReadyRef = useRef(false);
+  const roomRef = useRef<RoomSnapshot | null>(null);
+  const requeueFailures = useRef(0);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
+
+  useEffect(() => {
+    installSoundUnlock();
+    unlockSounds();
+  }, []);
+
+  useEffect(() => {
+    relayReadyRef.current = relayReady;
+  }, [relayReady]);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   useEffect(() => {
     setConversations(loadLocalConversations());
@@ -947,13 +965,17 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
 
   const startRandom = useCallback(async () => {
     if (!abuseSession) return;
+    unlockSounds();
     const participantId = createParticipantId();
     setClientId(participantId);
     setBusy(true);
     setError("");
     setScreen("matching");
+    searchInFlight.current = true;
+    requeueFailures.current = 0;
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
+      searchCrypto.current = encryption;
       const data = await requestMatch(participantId, abuseSession, {
         publicKey: serializePublicKey(encryption),
         signingKey: serializeSigningKey(encryption),
@@ -963,11 +985,13 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
       setError(caught instanceof Error && caught.message ? caught.message : t("findError"));
       setScreen("error");
     } finally {
+      searchInFlight.current = false;
       setBusy(false);
     }
   }, [abuseSession, acceptRoom, t]);
 
   const createPrivate = useCallback(async () => {
+    unlockSounds();
     const participantId = createParticipantId();
     const secret = createPrivateSecret();
     const encryption = await ensureSigningCredentials({ mode: "private", secret });
@@ -1092,22 +1116,111 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
   }, [acceptRoom, initialRoomId, storageReady]);
 
   useEffect(() => {
-    if (screen !== "matching" || !clientId) return;
-    const poll = window.setInterval(async () => {
-      // Queue polling is the only fast loop, and it stops when the tab is hidden.
-      if (document.visibilityState !== "visible") return;
+    if (screen !== "matching" || !clientId || !abuseSession) return;
+    let stopped = false;
+
+    const tick = async () => {
+      if (stopped || searchInFlight.current) return;
       try {
         const data = await requestJson<{ room: RoomSnapshot | null }>(
           "/api/match",
           { headers: { Authorization: `Bearer ${clientId}` } },
         );
-        if (data.room) acceptRoom(data.room, clientId);
+        if (stopped) return;
+        if (data.room && data.room.status !== "waiting") {
+          acceptRoom(data.room, clientId);
+          return;
+        }
+        if (!data.room && roomRef.current?.status === "waiting") {
+          const encryption = searchCrypto.current;
+          if (!encryption) return;
+          searchInFlight.current = true;
+          try {
+            const matched = await requestMatch(clientId, abuseSession, {
+              publicKey: serializePublicKey(encryption),
+              signingKey: serializeSigningKey(encryption),
+            });
+            if (!stopped) {
+              requeueFailures.current = 0;
+              acceptRoom(matched.room, clientId, encryption);
+            }
+          } catch (caught) {
+            requeueFailures.current += 1;
+            if (requeueFailures.current >= 3) {
+              setError(caught instanceof Error && caught.message ? caught.message : t("findError"));
+              setScreen("error");
+            }
+          } finally {
+            searchInFlight.current = false;
+          }
+        }
       } catch {
         // A temporary polling issue should not end the queue.
       }
-    }, 1500);
-    return () => window.clearInterval(poll);
-  }, [acceptRoom, clientId, screen]);
+    };
+
+    void tick();
+    const poll = window.setInterval(() => void tick(), 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(poll);
+    };
+  }, [abuseSession, acceptRoom, clientId, screen, t]);
+
+  useEffect(() => {
+    if (screen !== "matching" || !room || room.status !== "waiting" || !clientId) return;
+    const roomId = room.id;
+    const abort = new AbortController();
+
+    const watch = async () => {
+      while (!abort.signal.aborted) {
+        try {
+          const response = await fetch(`/api/rooms/${roomId}/events`, {
+            headers: {
+              Accept: "text/event-stream",
+              Authorization: `Bearer ${clientId}`,
+            },
+            cache: "no-store",
+            signal: abort.signal,
+          });
+          if (!response.ok || !response.body) throw new Error("Relay unavailable");
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (!abort.signal.aborted) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true }).replaceAll("\r\n", "\n");
+            let boundary = buffer.indexOf("\n\n");
+            while (boundary >= 0) {
+              const block = buffer.slice(0, boundary);
+              buffer = buffer.slice(boundary + 2);
+              boundary = buffer.indexOf("\n\n");
+              if (!block.includes("event: peer")) continue;
+              const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
+              if (!dataLine) continue;
+              const peer = JSON.parse(dataLine.slice(5).trim()) as { connected?: boolean };
+              if (peer.connected !== true) continue;
+              const snapshot = await requestJson<{ room: RoomSnapshot }>(`/api/rooms/${roomId}`, {
+                headers: { Authorization: `Bearer ${clientId}` },
+              });
+              if (!abort.signal.aborted && snapshot.room.status !== "waiting") {
+                acceptRoom(snapshot.room, clientId);
+                abort.abort();
+                return;
+              }
+            }
+          }
+        } catch {
+          if (abort.signal.aborted) return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 800));
+      }
+    };
+
+    void watch();
+    return () => abort.abort();
+  }, [acceptRoom, clientId, room, screen]);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId) return;
@@ -1213,15 +1326,13 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
       if (eventType === "message") void receiveMessage(payload);
        if (eventType === "peer") {
          try {
-           const peer = JSON.parse(payload) as { connected?: boolean };
-           const wasConnected = relayReady;
-           setRelayReady(peer.connected === true);
-           // Play sound when peer connects
-           if (peer.connected === true && !wasConnected) {
-             playSound("connected");
-           } else if (peer.connected === false && wasConnected) {
-             playSound("disconnected");
-           }
+          const peer = JSON.parse(payload) as { connected?: boolean };
+          const wasConnected = relayReadyRef.current;
+          const connected = peer.connected === true;
+          relayReadyRef.current = connected;
+          setRelayReady(connected);
+          if (connected && !wasConnected) playSound("connected");
+          if (!connected && wasConnected) playSound("disconnected");
          } catch {
            setRelayReady(false);
          }
@@ -1359,13 +1470,17 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
 
   const nextChat = useCallback(async () => {
     if (!abuseSession) return;
+    unlockSounds();
     leaveRoom(false);
     const participantId = createParticipantId();
     setClientId(participantId);
     setScreen("matching");
     setBusy(true);
+    searchInFlight.current = true;
+    requeueFailures.current = 0;
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
+      searchCrypto.current = encryption;
       const data = await requestMatch(participantId, abuseSession, {
         publicKey: serializePublicKey(encryption),
         signingKey: serializeSigningKey(encryption),
@@ -1375,9 +1490,18 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
       setError(caught instanceof Error && caught.message ? caught.message : t("nextError"));
       setScreen("error");
     } finally {
+      searchInFlight.current = false;
       setBusy(false);
     }
   }, [abuseSession, acceptRoom, leaveRoom, t]);
+
+  useEffect(() => {
+    if (screen !== "chat" || room?.kind !== "random" || room.status !== "active") return;
+    const timer = window.setTimeout(() => {
+      if (!relayReadyRef.current) void nextChat();
+    }, 45_000);
+    return () => window.clearTimeout(timer);
+  }, [nextChat, room?.id, room?.kind, room?.status, screen]);
 
   const cancelSearch = useCallback(async () => {
     await leaveRoom(true);
@@ -1385,6 +1509,7 @@ export default function ChatApp({ initialRoomId: propInitialRoomId }: ChatAppPro
 
   const sendMessage = useCallback(async (event?: FormEvent) => {
     event?.preventDefault();
+    unlockSounds();
     const body = draft.trim();
     if (!body || !room || !clientId || !relayReady || !safetyCode || sending) return;
     setSending(true);

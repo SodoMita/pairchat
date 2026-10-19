@@ -1,120 +1,97 @@
-// Simple notification sounds using Web Audio API
-// This creates a pleasant notification tone programmatically
-
 export type SoundType = "message" | "connected" | "disconnected";
 
-const soundContexts: Map<SoundType, AudioContext | null> = new Map();
+type Tone = { frequency: number; at: number; duration: number };
 
-function createOscillator(
-  context: AudioContext,
-  type: OscillatorType = "sine",
-  frequency: number = 800,
-  duration: number = 0.1,
-): OscillatorNode {
-  const oscillator = context.createOscillator();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, context.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(
-    0.001,
-    context.currentTime + duration,
-  );
-  return oscillator;
+const PATTERNS: Record<SoundType, Tone[]> = {
+  message: [
+    { frequency: 784, at: 0, duration: 0.08 },
+    { frequency: 1046, at: 0.09, duration: 0.12 },
+  ],
+  connected: [
+    { frequency: 523, at: 0, duration: 0.1 },
+    { frequency: 659, at: 0.11, duration: 0.1 },
+    { frequency: 784, at: 0.22, duration: 0.16 },
+  ],
+  disconnected: [
+    { frequency: 494, at: 0, duration: 0.1 },
+    { frequency: 370, at: 0.12, duration: 0.16 },
+  ],
+};
+
+let context: AudioContext | null = null;
+let unlockInstalled = false;
+
+function audioContext() {
+  if (typeof window === "undefined") return null;
+  const Context =
+    window.AudioContext ||
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Context) return null;
+  if (!context || context.state === "closed") context = new Context();
+  return context;
 }
 
-export function playSound(type: SoundType): void {
-  // Check if sounds are muted (user preference)
-  if (typeof window !== "undefined") {
-    const muted = window.localStorage.getItem("luma-sounds-muted");
-    if (muted === "true") return;
-  }
+export function areSoundsMuted() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem("luma-sounds-muted") === "true";
+}
 
+export function toggleSounds(muted: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem("luma-sounds-muted", String(muted));
+}
+
+export function unlockSounds() {
+  const audio = audioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") void audio.resume();
   try {
-    // Use a single context for each sound type to avoid creating too many contexts
-    let context = soundContexts.get(type);
-    
-    if (!context || context.state === "closed") {
-      context = new (window.AudioContext || (window as any).webkitAudioContext)();
-      soundContexts.set(type, context);
-    }
-
-    if (!context) return;
-
-    // Configuration for different sound types
-    const configs: Record<SoundType, { frequencies: number[]; duration: number }> = {
-      message: {
-        frequencies: [800, 1000, 1200],
-        duration: 0.15,
-      },
-      connected: {
-        frequencies: [600, 900],
-        duration: 0.2,
-      },
-      disconnected: {
-        frequencies: [400, 200],
-        duration: 0.2,
-      },
-    };
-
-    const config = configs[type];
-    const gainNode = context.createGain();
-    gainNode.gain.setValueAtTime(0.1, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + config.duration);
-
-    // Create a chord for richer sound
-    const oscillators = config.frequencies.map((freq) => {
-      const oscillator = createOscillator(
-        context,
-        "sine",
-        freq,
-        config.duration,
-      );
-      oscillator.connect(gainNode);
-      oscillator.start(context.currentTime);
-      oscillator.stop(context.currentTime + config.duration);
-      return oscillator;
-    });
-
-    gainNode.connect(context.destination);
-
-    // Clean up after sound finishes
-    setTimeout(() => {
-      oscillators.forEach((osc) => {
-        try {
-          osc.disconnect();
-        } catch {
-          // Already disconnected
-        }
-      });
-      try {
-        gainNode.disconnect();
-      } catch {
-        // Already disconnected
-      }
-    }, config.duration * 1000 + 100);
+    const buffer = audio.createBuffer(1, 1, 22050);
+    const source = audio.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audio.destination);
+    source.start();
   } catch {
-    // Audio not supported or blocked
-    // Fallback: try HTML5 Audio with data URI
-    try {
-      const audio = new Audio(
-        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAESsAAABkYXRhAAABAAgGAAB4bnMAAAAAAABQVZFZm10IBAAAAABAAEAESsAAABkYXRhAAABAAgGAAB4bnMAAAAAAABQVZFZm10IBAAAAABAAEAESsA",
-      );
-      audio.volume = 0.1;
-      audio.play().catch(() => {});
-    } catch {
-      // Audio completely unavailable
-    }
+    // A blocked context can still be resumed on the next gesture.
   }
 }
 
-export function toggleSounds(muted: boolean): void {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem("luma-sounds-muted", String(muted));
-  }
+export function installSoundUnlock() {
+  if (unlockInstalled || typeof window === "undefined") return;
+  unlockInstalled = true;
+  const unlock = () => unlockSounds();
+  window.addEventListener("pointerdown", unlock);
+  window.addEventListener("keydown", unlock);
 }
 
-export function areSoundsMuted(): boolean {
-  if (typeof window !== "undefined") {
-    return window.localStorage.getItem("luma-sounds-muted") === "true";
+function playTone(audio: AudioContext, tone: Tone, volume: number) {
+  const start = audio.currentTime + tone.at;
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(tone.frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + tone.duration);
+  oscillator.connect(gain);
+  gain.connect(audio.destination);
+  oscillator.start(start);
+  oscillator.stop(start + tone.duration + 0.02);
+}
+
+export function playSound(type: SoundType) {
+  if (areSoundsMuted()) return;
+  const audio = audioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") {
+    void audio.resume().then(() => {
+      if (audio.state === "running") playSound(type);
+    });
+    return;
   }
-  return false;
+  try {
+    for (const tone of PATTERNS[type]) playTone(audio, tone, type === "message" ? 0.08 : 0.07);
+  } catch {
+    // Audio can be unavailable in locked or headless browsers.
+  }
 }
