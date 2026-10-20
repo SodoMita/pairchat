@@ -565,8 +565,8 @@ export default function ChatCanvas({
         </div>
       )}
       {!hidden && (
-        <div className="px-4 pb-3 sm:px-6">
-          <div className="relative mx-auto max-h-[300px] overflow-hidden rounded-xl border border-[#e1e3dd] bg-white" style={{ aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}>
+        <div className="px-3 pb-2 sm:px-6 sm:pb-3">
+          <div className="relative mx-auto max-h-[180px] overflow-hidden rounded-xl border border-[#e1e3dd] bg-white sm:max-h-[240px] lg:max-h-[280px]" style={{ aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}>
             <canvas
               ref={mineFirst ? ownCanvas : peerCanvas}
               width={CANVAS_WIDTH}

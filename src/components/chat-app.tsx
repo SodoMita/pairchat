@@ -249,8 +249,13 @@ function Header({
   soundEnabled: boolean;
   onToggleSound: () => void;
 }) {
+  // A slimmer chrome when inside a chat room gives more vertical space to the
+  // conversation, which is especially noticeable when the shared canvas is open.
+  const heightClass = inRoom
+    ? "h-[56px] sm:h-[60px]"
+    : "h-[76px]";
   return (
-    <header className="relative z-30 mx-auto flex h-[76px] w-full max-w-[1500px] items-center justify-between gap-3 px-5 sm:px-8">
+    <header className={`relative z-30 mx-auto flex w-full max-w-[1500px] shrink-0 items-center justify-between gap-3 px-4 sm:px-6 ${heightClass}`}>
       {inRoom ? (
         <div className="shrink-0" aria-label="Luma"><Brand /></div>
       ) : (
@@ -664,11 +669,11 @@ function MatchingScreen({
   onToggleSound: () => void;
 }) {
   return (
-    <div className="min-h-screen bg-[#f8f6f0]">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f8f6f0]">
       <Header t={t} language={language} onLanguage={onLanguage} inRoom soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
-      <main className="mx-auto grid min-h-[calc(100vh-76px)] w-full max-w-[1400px] lg:grid-cols-[280px_minmax(0,1fr)]">
-        <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
-        <div className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20 pt-10 lg:pt-0">
+      <main className="mx-auto grid min-h-0 w-full max-w-[1400px] flex-1 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} contained />
+        <div className="grid min-h-0 place-items-center overflow-y-auto px-5 py-10 lg:py-0">
           <div className="w-full max-w-[580px] text-center">
             <div className="search-radar mx-auto mb-9 grid h-40 w-40 place-items-center rounded-full">
               <div className="search-radar-inner grid h-20 w-20 place-items-center rounded-full bg-[#ff6747] text-white shadow-[0_14px_35px_rgba(255,103,71,0.28)]"><Users size={31} /></div>
@@ -913,14 +918,14 @@ function ChatScreen({
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f3ed]">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f5f3ed]">
       <Header t={t} language={language} onLanguage={onLanguage} inRoom soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
-      <main className="mx-auto max-w-[1400px] px-3 pb-5 sm:px-6 sm:pb-8">
-        <div className="chat-shell grid h-[calc(100vh-102px)] min-h-[610px] overflow-hidden rounded-[26px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.10)] lg:grid-cols-[280px_1fr]">
+      <main className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col px-2 pb-2 pt-0 sm:px-4 sm:pb-4">
+        <div className="chat-shell grid min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.10)] lg:grid-cols-[280px_1fr] lg:rounded-[26px]">
           <ConversationSidebar conversations={conversations} currentRoomId={room.id} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} contained />
 
-          <section className="flex min-w-0 flex-col">
-            <div className="flex h-[74px] shrink-0 items-center justify-between border-b border-[#ecece7] px-4 sm:px-6">
+          <section className="flex min-h-0 min-w-0 flex-col">
+            <div className="flex h-[64px] shrink-0 items-center justify-between border-b border-[#ecece7] px-3 sm:h-[74px] sm:px-6">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54] lg:hidden"><UserRound size={18} /></div>
                 <div className="min-w-0">
@@ -976,7 +981,7 @@ function ChatScreen({
                 ) : null}
               </div>
             )}
-            <div ref={scrollRef} className="chat-scroll flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+            <div ref={scrollRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-8 sm:py-6">
               {waiting && room.kind === "private" ? (
                 <div className="grid h-full min-h-[360px] place-items-center">
                   <div className="max-w-md text-center">
@@ -2285,7 +2290,7 @@ export default function ChatApp() {
   }
 
   if (screen === "error") {
-    return <div className="min-h-screen bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} soundEnabled={soundOn} onToggleSound={toggleSound} /><main className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
+    return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} inRoom soundEnabled={soundOn} onToggleSound={toggleSound} /><main className="grid flex-1 place-items-center overflow-y-auto px-5 py-10"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
   }
 
   if (screen === "matching") return <MatchingScreen onCancel={() => void cancelSearch()} onPrivate={() => void privateFromQueue()} starting={busy} matchNotice={homeNotice} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;

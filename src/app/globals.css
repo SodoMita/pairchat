@@ -177,6 +177,7 @@ html[dir="rtl"] .chat-demo {
 
 .history-sidebar-contained {
   max-height: 166px;
+  min-height: 0;
 }
 
 .chat-shell {
@@ -234,7 +235,6 @@ html[dir="rtl"] .chat-demo {
 @media (max-width: 639px) {
   .chat-shell {
     min-height: 0;
-    height: calc(100dvh - 92px);
     border-radius: 20px;
   }
 

@@ -400,9 +400,11 @@ export default function AgentChannelView() {
     ? `curl -fsS "${origin}/static/create.mjs" -o create.mjs\nURL=$(node create.mjs "${origin}")`
     : `curl -fsS "$BASE/static/create.mjs" -o create.mjs\nURL=$(node create.mjs "$BASE")`;
 
+  const inChannel = Boolean(creds);
+
   return (
-    <div className="min-h-screen bg-[#f8f6f0] text-[#1e2927]">
-      <header className="mx-auto flex h-[76px] w-full max-w-[1200px] items-center justify-between gap-3 px-5 sm:px-8">
+    <div className={`${inChannel ? "flex h-[100dvh] flex-col overflow-hidden" : "min-h-screen"} bg-[#f8f6f0] text-[#1e2927]`}>
+      <header className={`mx-auto flex w-full max-w-[1200px] shrink-0 items-center justify-between gap-3 px-4 sm:px-8 ${inChannel ? "h-[60px]" : "h-[76px]"}`}>
         <div className="flex items-center gap-4">
           <a
             href="/"
@@ -441,7 +443,7 @@ export default function AgentChannelView() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1200px] px-4 pb-12 sm:px-8">
+      <main className={`mx-auto w-full max-w-[1200px] ${inChannel ? "flex min-h-0 flex-1 flex-col px-2 pb-2 sm:px-4 sm:pb-4" : "px-4 pb-12 sm:px-8"}`}>
         {!creds ? (
           <div className="mx-auto mt-6 max-w-[780px] space-y-6">
             <section className="rounded-[28px] border border-[#e3e4dd] bg-white p-7 shadow-[0_20px_60px_rgba(30,41,39,0.07)] sm:p-10">
@@ -503,8 +505,8 @@ export default function AgentChannelView() {
             </section>
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-            <section className="flex h-[calc(100vh-116px)] min-h-[560px] flex-col overflow-hidden rounded-[26px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.09)]">
+          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_340px] lg:gap-5">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.09)] lg:rounded-[26px]">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecece7] px-5 py-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -557,7 +559,7 @@ export default function AgentChannelView() {
                 </div>
               )}
 
-              <div ref={scrollRef} className="flex-1 space-y-3.5 overflow-y-auto px-5 py-5">
+              <div ref={scrollRef} className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
                 {folded.rows.length === 0 ? (
                   <div className="mx-auto my-12 max-w-md text-center">
                     <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#fff0ea] text-[#ff6747]">
@@ -715,7 +717,7 @@ export default function AgentChannelView() {
               </form>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="space-y-4 overflow-y-auto lg:pe-1">
               <div className="rounded-3xl border border-[#e3e4dd] bg-white p-5">
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-[13px] font-extrabold text-[#1e2927]">Invite a Twin AI Agent</h2>
