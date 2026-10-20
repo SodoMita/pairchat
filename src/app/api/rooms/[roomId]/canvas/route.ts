@@ -1,10 +1,11 @@
 import { db } from "@/db";
 import { chatParticipants, chatRooms } from "@/db/schema";
 import { isValidClientId, isValidRoomId } from "@/lib/chat";
-import { isCanvasEnvelope } from "@/lib/canvas";
+import { canvasSigningBytes, isCanvasEnvelope } from "@/lib/canvas";
 import { isCanvasEnabled } from "@/lib/canvas-flag";
 import { publishCanvasEvent } from "@/lib/chat-events";
 import { allowRequest } from "@/lib/rate-limit";
+import { claimMessageId } from "@/lib/replay-cache";
 import {
   bearerCredential,
   isTrustedJsonMutation,
@@ -12,7 +13,6 @@ import {
   requestClientAddress,
 } from "@/lib/request-security";
 import { hashAccessCredential } from "@/lib/server-credentials";
-import { canvasSigningBytes } from "@/lib/canvas";
 import { verifyParticipantSignature } from "@/lib/server-signatures";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -39,12 +39,13 @@ export async function POST(
   if (!isCanvasEnvelope(payload?.envelope)) {
     return NextResponse.json({ error: "Invalid canvas envelope." }, { status: 400 });
   }
-  if (!allowRequest(`canvas:${requestClientAddress(request)}:${roomId}:${accessHash}`, 40, 10_000)) {
+  if (!allowRequest(`canvas:${requestClientAddress(request)}:${roomId}:${accessHash}`, 60, 10_000)) {
     return NextResponse.json({ error: "Too many canvas events." }, { status: 429 });
   }
 
-  const [permission] = await db
+  const members = await db
     .select({
+      clientId: chatParticipants.clientId,
       publicId: chatParticipants.publicId,
       signingKey: chatParticipants.signingKey,
       roomStatus: chatRooms.status,
@@ -54,14 +55,18 @@ export async function POST(
     .where(
       and(
         eq(chatParticipants.roomId, roomId),
-        eq(chatParticipants.clientId, accessHash),
         isNull(chatParticipants.leftAt),
       ),
-    )
-    .limit(1);
+    );
 
-  if (!permission || permission.roomStatus !== "active") {
-    return NextResponse.json({ error: "This chat is not active." }, { status: 403 });
+  const permission = members.find((member) => member.clientId === accessHash);
+  const peer = members.find((member) => member.clientId !== accessHash);
+
+  if (!permission) {
+    return NextResponse.json({ error: "You are not an active participant." }, { status: 403 });
+  }
+  if (permission.roomStatus !== "active" || !peer) {
+    return NextResponse.json({ error: "This chat is not active." }, { status: 409 });
   }
   if (permission.publicId !== payload.envelope.senderPublicId) {
     return NextResponse.json({ error: "Sender does not match this participant." }, { status: 403 });
@@ -75,10 +80,10 @@ export async function POST(
   ) {
     return NextResponse.json({ error: "Invalid canvas signature." }, { status: 400 });
   }
-
-  const delivered = publishCanvasEvent(roomId, accessHash, payload.envelope);
-  if (!delivered) {
-    return NextResponse.json({ error: "Encrypted peer is not connected." }, { status: 409 });
+  if (!claimMessageId(roomId, payload.envelope.id)) {
+    return NextResponse.json({ error: "Duplicate canvas envelope." }, { status: 409 });
   }
+
+  publishCanvasEvent(roomId, accessHash, payload.envelope);
   return NextResponse.json({ ok: true }, { status: 202 });
 }

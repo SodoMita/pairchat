@@ -56,19 +56,24 @@ export async function POST(
     return NextResponse.json({ error: "Invalid read receipt." }, { status: 400 });
   }
 
-  const [participant] = await db
-    .select({ publicId: chatParticipants.publicId, signingKey: chatParticipants.signingKey })
+  const members = await db
+    .select({
+      clientId: chatParticipants.clientId,
+      publicId: chatParticipants.publicId,
+      signingKey: chatParticipants.signingKey,
+    })
     .from(chatParticipants)
     .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
     .where(
       and(
         eq(chatParticipants.roomId, roomId),
-        eq(chatParticipants.clientId, accessHash!),
         isNull(chatParticipants.leftAt),
         eq(chatRooms.status, "active"),
       ),
-    )
-    .limit(1);
+    );
+
+  const participant = members.find((member) => member.clientId === accessHash);
+  const peer = members.find((member) => member.clientId !== accessHash);
 
   if (!participant || participant.publicId !== recipientPublicId) {
     return NextResponse.json({ error: "Not an active recipient." }, { status: 403 });
@@ -86,6 +91,7 @@ export async function POST(
     recipientPublicId,
     readAt,
     signature,
+    peer?.clientId,
   );
   if (!published) {
     return NextResponse.json({ error: "Encrypted peer is not connected." }, { status: 409 });

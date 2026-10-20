@@ -582,12 +582,14 @@ function HomeScreen({
                     <span className="me-2 text-[#c96a54]">{index + 1}.</span>
                     {topic.title}
                   </h3>
-                  {labeled.map(([label, body]) => (
-                    <p key={label} className="mt-3 text-[17px] leading-[1.75] text-[#44524c]">
-                      <strong className="font-extrabold text-[#27322f]">{label}. </strong>
-                      {body}
-                    </p>
-                  ))}
+                  <p className="mt-3 space-y-3 text-[16px] leading-[1.8] text-[#44524c]">
+                    {labeled.map(([label, body]) => (
+                      <span key={label} className="block">
+                        <strong className="font-extrabold text-[#27322f]">{label}: </strong>
+                        {body}
+                      </span>
+                    ))}
+                  </p>
                 </li>
               );
             })}
@@ -693,7 +695,11 @@ function MessageReceipt({
 }) {
   if (!delivery) return null;
   const label =
-    delivery === "read" ? t("readStatus") : delivery === "delivered" ? t("deliveredStatus") : t("sentStatus");
+    delivery === "read"
+      ? `${t("deliveredStatus")} · ${t("readStatus")}`
+      : delivery === "delivered"
+        ? t("deliveredStatus")
+        : t("sentStatus");
   const color = delivery === "read" ? "text-[#ff6747]" : "text-[#a4aaa7]";
   return (
     <span className={`ms-1.5 inline-flex items-center gap-0.5 ${color}`} title={label} aria-label={label}>
@@ -742,7 +748,7 @@ function ChatScreen({
   soundEnabled,
   onToggleSound,
   canvasEnabled,
-  canvasIncoming,
+  canvasQueue,
 }: {
   room: RoomSnapshot;
   clientId: string;
@@ -775,7 +781,7 @@ function ChatScreen({
   onNext: () => void;
   onReadIncoming: (messageId: string) => void;
   canvasEnabled: boolean;
-  canvasIncoming: CanvasEnvelope | null;
+  canvasQueue: CanvasEnvelope[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -787,7 +793,7 @@ function ChatScreen({
   const [partnerUnavailable, setPartnerUnavailable] = useState(false);
   const waiting = room.status === "waiting";
   const ended = room.status === "ended" || !room.participantActive;
-  const secureReady = relayReady && Boolean(safetyCode);
+  const secureReady = Boolean(safetyCode);
 
   useEffect(() => {
     if (waiting || ended || relayReady) {
@@ -940,13 +946,13 @@ function ChatScreen({
                </div>
              </div>
 
-            {canvasEnabled && !waiting && !ended && (
+            {canvasEnabled && !waiting && !ended && secureReady && (
               <ChatCanvas
+                key={room.id}
                 room={room}
                 clientId={clientId}
-                connected={relayReady && Boolean(safetyCode)}
                 encryption={conversations.find((item) => item.roomId === room.id)?.encryption}
-                incoming={canvasIncoming}
+                queue={canvasQueue}
                 t={t}
               />
             )}
@@ -1134,7 +1140,7 @@ export default function ChatApp() {
   const lastTypingSignal = useRef(0);
   const reportedReads = useRef(new Set<string>());
   const [canvasEnabled, setCanvasEnabled] = useState(false);
-  const [canvasIncoming, setCanvasIncoming] = useState<CanvasEnvelope | null>(null);
+  const [canvasQueue, setCanvasQueue] = useState<CanvasEnvelope[]>([]);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
 
   useEffect(() => {
@@ -1323,7 +1329,7 @@ export default function ChatApp() {
   ) => {
     if (!nextRoom) return;
     reportedReads.current = new Set();
-    setCanvasIncoming(null);
+    setCanvasQueue([]);
     setClientId(participantId);
     const nextConversations = saveLocalRoom(nextRoom, participantId, encryption);
     const local = nextConversations.find((item) => item.roomId === nextRoom.id);
@@ -1705,9 +1711,7 @@ export default function ChatApp() {
     let disposed = false;
     // The relay handles presence; this poll reconciles room status and keys.
     const refresh = async () => {
-      // A private-room host must notice a guest even if its tab is backgrounded.
-      // Active rooms can still use the slow, visible-only reconciliation poll.
-      if (document.visibilityState !== "visible" && room.status !== "waiting") return;
+      if (document.visibilityState !== "visible") return;
       try {
         const data = await requestJson<{ room: RoomSnapshot }>(
           `/api/rooms/${roomId}`,
@@ -1734,10 +1738,7 @@ export default function ChatApp() {
       }
     };
     void refresh();
-    const poll = window.setInterval(
-      () => void refresh(),
-      room.status === "waiting" ? 2_000 : 20_000,
-    );
+    const poll = window.setInterval(() => void refresh(), 20_000);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       disposed = true;
@@ -1831,20 +1832,6 @@ export default function ChatApp() {
         try {
           const peer = JSON.parse(payload) as { connected?: boolean };
           setRelayReady(peer.connected === true);
-          if (peer.connected === true && roomSnapshot.status === "waiting") {
-            void requestJson<{ room: RoomSnapshot }>(`/api/rooms/${roomId}`, {
-              headers: { Authorization: `Bearer ${clientId}` },
-              signal: AbortSignal.timeout(8000),
-            }).then((data) => {
-              if (abort.signal.aborted) return;
-              setRoom((current) => current?.id === roomId && !sameRoomConnection(current, data.room)
-                ? data.room
-                : current);
-              setConversations(saveLocalRoom(data.room, clientId));
-            }).catch(() => {
-              // The waiting-room poll remains a safety net for a dropped event.
-            });
-          }
         } catch {
           setRelayReady(false);
         }
@@ -1863,7 +1850,9 @@ export default function ChatApp() {
       if (eventType === "canvas") {
         try {
           const envelope = JSON.parse(payload) as unknown;
-          if (isCanvasEnvelope(envelope)) setCanvasIncoming(envelope);
+          if (isCanvasEnvelope(envelope)) {
+            setCanvasQueue((current) => [...current.slice(-255), envelope]);
+          }
         } catch {
           // Ignore malformed canvas frames.
         }
@@ -1943,8 +1932,37 @@ export default function ChatApp() {
       }
     };
 
+    let currentStreamAbort: AbortController | null = null;
+    let wasHidden = document.visibilityState !== "visible";
+
+    const reconnectOnWake = () => {
+      if (document.visibilityState === "visible") {
+        if (wasHidden) {
+          wasHidden = false;
+          currentStreamAbort?.abort();
+        }
+      } else {
+        wasHidden = true;
+      }
+    };
+    const reconnectOnline = () => {
+      currentStreamAbort?.abort();
+    };
+    document.addEventListener("visibilitychange", reconnectOnWake);
+    window.addEventListener("online", reconnectOnline);
+
     const connect = async () => {
       while (!abort.signal.aborted) {
+        const streamAbort = new AbortController();
+        currentStreamAbort = streamAbort;
+        const onOuterAbort = () => streamAbort.abort();
+        abort.signal.addEventListener("abort", onOuterAbort, { once: true });
+        let watchdog: number | undefined;
+        const armWatchdog = () => {
+          if (watchdog) window.clearTimeout(watchdog);
+          watchdog = window.setTimeout(() => streamAbort.abort(), 25_000);
+        };
+        armWatchdog();
         try {
           const response = await fetch(`/api/rooms/${roomId}/events`, {
             headers: {
@@ -1952,15 +1970,17 @@ export default function ChatApp() {
               Authorization: `Bearer ${clientId}`,
             },
             cache: "no-store",
-            signal: abort.signal,
+            signal: streamAbort.signal,
           });
           if (!response.ok || !response.body) throw new Error("Encrypted relay unavailable");
+          armWatchdog();
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
-          while (!abort.signal.aborted) {
+          while (!streamAbort.signal.aborted) {
             const { value, done } = await reader.read();
             if (done) break;
+            armWatchdog();
             buffer += decoder.decode(value, { stream: true }).replaceAll("\r\n", "\n");
             if (buffer.length > 100_000) throw new Error("Relay frame overflow");
             let boundary = buffer.indexOf("\n\n");
@@ -1972,14 +1992,20 @@ export default function ChatApp() {
           }
         } catch {
           if (abort.signal.aborted) return;
+        } finally {
+          if (watchdog) window.clearTimeout(watchdog);
+          abort.signal.removeEventListener("abort", onOuterAbort);
         }
+        if (abort.signal.aborted) return;
         setRelayReady(false);
-        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        await new Promise((resolve) => window.setTimeout(resolve, document.visibilityState === "visible" ? 200 : 1_200));
       }
     };
 
     void connect();
     return () => {
+      document.removeEventListener("visibilitychange", reconnectOnWake);
+      window.removeEventListener("online", reconnectOnline);
       setRelayReady(false);
       abort.abort();
     };
@@ -2083,7 +2109,7 @@ export default function ChatApp() {
   const sendMessage = useCallback(async (event?: FormEvent) => {
     event?.preventDefault();
     const body = draft.trim();
-    if (!body || !room || !clientId || !relayReady || !safetyCode || sending) return;
+    if (!body || !room || !clientId || !safetyCode || sending) return;
     setSending(true);
     setDraft("");
     try {
@@ -2259,7 +2285,7 @@ export default function ChatApp() {
   if (screen === "matching") return <MatchingScreen onCancel={() => void cancelSearch()} onPrivate={() => void privateFromQueue()} starting={busy} matchNotice={homeNotice} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} onReadIncoming={(messageId) => void sendReadReceipt(messageId)} canvasEnabled={canvasEnabled} canvasIncoming={canvasIncoming} />;
+    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} onReadIncoming={(messageId) => void sendReadReceipt(messageId)} canvasEnabled={canvasEnabled} canvasQueue={canvasQueue} />;
   }
 
   return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} homeNotice={homeNotice} onDismissNotice={() => setHomeNotice(null)} storagePersistent={storagePersistent} />;

@@ -51,6 +51,11 @@ export async function GET(
     return NextResponse.json({ error: "Too many open streams for this chat." }, { status: 429 });
   }
 
+  await db
+    .update(chatParticipants)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(chatParticipants.id, membership.id));
+
   const encoder = new TextEncoder();
   let cleanup = () => {};
 

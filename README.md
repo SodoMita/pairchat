@@ -1,6 +1,6 @@
 # Luma — anonymous text chat roulette
 
-> **Preview:** https://3000-i5d6t6wnh1jwjsyemepxj.e2b.app
+> **Preview:** https://3000-i1rrc2t9wh88d36z0jc8a.e2b.app
 >
 > Preview URLs are temporary and change when the sandbox restarts; the default GitHub branch is `main`.
 

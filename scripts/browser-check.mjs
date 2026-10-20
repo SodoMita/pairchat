@@ -284,9 +284,78 @@ try {
   await visitor.locator('textarea').fill('Private invite works');
   await visitor.locator('textarea').press('Enter');
   await owner.locator('.chat-scroll').getByText('Private invite works').waitFor({ timeout: 10_000 });
-  note('Private invite connects two browsers and delivers encrypted text');
+  await visitor.locator('.chat-scroll').getByText('Read').waitFor({ timeout: 10_000 });
+  note('Private invite connects two browsers and delivers encrypted text + Read receipt');
   await end(owner);
   await ownerCtx.close(); await visitorCtx.close();
+
+  // Shared canvas must work both live AND when the peer app is in the background
+  // (SSE disconnected while backgrounded, switching between apps on one phone).
+  const drawCtxA = await context();
+  const drawCtxB = await context();
+  const drawA = await user(drawCtxA);
+  const drawB = await user(drawCtxB);
+  await start(drawA);
+  await start(drawB);
+  await Promise.all([waitForComposer(drawA), waitForComposer(drawB)]);
+  await drawA.getByRole('button', { name: 'Draw together' }).waitFor({ timeout: 10_000 });
+
+  // Simulate peer app suspended in background (network/SSE dropped).
+  await drawCtxB.setOffline(true);
+  await drawA.waitForTimeout(800);
+  await drawA.getByRole('button', { name: 'Draw together' }).click();
+  await drawA.getByText(/Waiting for them to accept drawing/i).waitFor({ timeout: 5_000 });
+  await drawA.waitForTimeout(1_500);
+  assert.equal(await drawA.getByText(/Waiting for them to accept drawing/i).isVisible(), true,
+    'Canvas invite stays open while peer app is in background');
+  await drawA.locator('textarea').fill('Sent while peer backgrounded');
+  await drawA.locator('textarea').press('Enter');
+
+  // Switch apps: put A in background, bring B to foreground.
+  await drawCtxA.setOffline(true);
+  await drawCtxB.setOffline(false);
+  await drawB.locator('.chat-scroll').getByText('Sent while peer backgrounded').waitFor({ timeout: 15_000 });
+  await drawB.getByText(/want to draw together/i).waitFor({ timeout: 15_000 });
+  await drawB.getByRole('button', { name: 'Accept' }).click();
+  await drawB.locator('canvas[data-layer="input"]').waitFor({ timeout: 5_000 });
+
+  // Draw a stroke on B while A is still suspended in background.
+  const boxB = await drawB.locator('canvas[data-layer="input"]').boundingBox();
+  assert.ok(boxB, 'Canvas has visible bounding box');
+  await drawB.mouse.move(boxB.x + boxB.width * 0.2, boxB.y + boxB.height * 0.3);
+  await drawB.mouse.down();
+  await drawB.mouse.move(boxB.x + boxB.width * 0.7, boxB.y + boxB.height * 0.7, { steps: 8 });
+  await drawB.mouse.up();
+
+  // Bring A back to foreground: A must open the canvas and render B's stroke + Read receipt!
+  await drawCtxA.setOffline(false);
+  await drawA.locator('canvas[data-layer="input"]').waitFor({ timeout: 15_000 });
+  await drawA.locator('.chat-scroll').getByText('Delivered · Read').waitFor({ timeout: 10_000 });
+  const countInk = page => page.evaluate(() => {
+    let total = 0;
+    for (const c of document.querySelectorAll('canvas[data-layer="bottom"], canvas[data-layer="top"]')) {
+      const ctx = c.getContext('2d');
+      const data = ctx.getImageData(0, 0, c.width, c.height).data;
+      for (let i = 3; i < data.length; i += 16) if (data[i] > 0) total++;
+    }
+    return total;
+  });
+  await waitUntil(async () => (await countInk(drawA)) > 20, { timeout: 10_000, label: 'peer stroke rendered on A' });
+
+  // Hide -> Show preserves rendered ink; Reset board clears after peer approves; Stop drawing closes on both.
+  await drawA.getByRole('button', { name: 'Hide drawing' }).click();
+  assert.equal(await drawA.locator('canvas[data-layer="input"]').count(), 0);
+  await drawA.getByRole('button', { name: 'Show drawing' }).click();
+  assert.ok((await countInk(drawA)) > 20, 'ink preserved across Hide/Show');
+  await drawA.getByRole('button', { name: 'Reset board' }).click();
+  await drawB.getByRole('button', { name: 'Clear all' }).click();
+  await waitUntil(async () => (await countInk(drawA)) === 0 && (await countInk(drawB)) === 0,
+    { timeout: 10_000, label: 'mutual board reset' });
+  await drawB.getByRole('button', { name: 'Stop drawing' }).click();
+  await drawA.getByRole('button', { name: 'Draw together' }).waitFor({ timeout: 10_000 });
+  note('Shared canvas survives background app switching, syncs encrypted strokes, resets, and stops cleanly');
+  await end(drawA);
+  await drawCtxA.close(); await drawCtxB.close();
 
   assert.deepEqual(errors, [], `Browser page errors: ${errors.join(' | ')}`);
   note('No uncaught browser errors');

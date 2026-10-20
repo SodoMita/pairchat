@@ -65,8 +65,9 @@ export async function POST(
     return NextResponse.json({ error: "Too many messages." }, { status: 429 });
   }
 
-  const [permission] = await db
+  const members = await db
     .select({
+      clientId: chatParticipants.clientId,
       roomStatus: chatRooms.status,
       signingKey: chatParticipants.signingKey,
       publicId: chatParticipants.publicId,
@@ -76,11 +77,12 @@ export async function POST(
     .where(
       and(
         eq(chatParticipants.roomId, roomId),
-        eq(chatParticipants.clientId, accessHash),
         isNull(chatParticipants.leftAt),
       ),
-    )
-    .limit(1);
+    );
+
+  const permission = members.find((member) => member.clientId === accessHash);
+  const peer = members.find((member) => member.clientId !== accessHash);
 
   if (!permission) {
     return NextResponse.json(
@@ -88,7 +90,7 @@ export async function POST(
       { status: 403 },
     );
   }
-  if (permission.roomStatus !== "active") {
+  if (permission.roomStatus !== "active" || !peer) {
     return NextResponse.json(
       { error: "This chat is not active." },
       { status: 409 },
@@ -121,7 +123,7 @@ export async function POST(
   if (!claimMessageId(roomId, payload.envelope.id)) {
     return NextResponse.json({ error: "Duplicate encrypted message." }, { status: 409 });
   }
-  const delivered = publishChatMessage(roomId, accessHash, payload.envelope);
+  const delivered = publishChatMessage(roomId, accessHash, payload.envelope, peer.clientId);
   if (!delivered) {
     return NextResponse.json(
       { error: "Encrypted peer is not connected." },

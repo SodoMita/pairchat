@@ -31,29 +31,80 @@ export type LiveChatEvent =
     }
   | { type: "canvas"; envelope: CanvasEnvelope };
 
-type PendingDelivery = { senderAccessHash: string; recipientAccessHash: string; expiresAt: number };
-type PendingDeliveries = Map<string, Map<string, PendingDelivery>>;
+const TRANSIENT_TTL_MS = 10 * 60_000;
+const MAX_QUEUED_EVENTS = 128;
+const MAX_ROOM_CANVAS_EVENTS = 256;
 
-const globalForPendingDelivery = globalThis as typeof globalThis & {
-  __lumaPendingDeliveries?: PendingDeliveries;
+type PendingDelivery = {
+  senderAccessHash: string;
+  recipientAccessHash: string;
+  expiresAt: number;
 };
-const pendingDeliveries =
-  globalForPendingDelivery.__lumaPendingDeliveries ?? new Map<string, Map<string, PendingDelivery>>();
-globalForPendingDelivery.__lumaPendingDeliveries = pendingDeliveries;
+type PendingDeliveries = Map<string, Map<string, PendingDelivery>>;
+type QueuedEvent = { event: LiveChatEvent; expiresAt: number };
+type PendingRecipientEvents = Map<string, Map<string, QueuedEvent[]>>;
+type QueuedCanvasEnvelope = { envelope: CanvasEnvelope; expiresAt: number };
+type RoomCanvasLogs = Map<string, QueuedCanvasEnvelope[]>;
 
 type ChatEventListener = (event: LiveChatEvent) => void;
 type ParticipantListeners = Map<string, Set<ChatEventListener>>;
 type ChatEventRegistry = Map<string, ParticipantListeners>;
 
-const globalForChatEvents = globalThis as typeof globalThis & {
+const globalForChatState = globalThis as typeof globalThis & {
+  __lumaPendingDeliveries?: PendingDeliveries;
+  __lumaPendingRecipientEvents?: PendingRecipientEvents;
+  __lumaRoomCanvasLogs?: RoomCanvasLogs;
   __lumaChatEventRegistry?: ChatEventRegistry;
 };
 
-const registry =
-  globalForChatEvents.__lumaChatEventRegistry ??
-  new Map<string, ParticipantListeners>();
+const pendingDeliveries =
+  globalForChatState.__lumaPendingDeliveries ??
+  new Map<string, Map<string, PendingDelivery>>();
+globalForChatState.__lumaPendingDeliveries = pendingDeliveries;
 
-globalForChatEvents.__lumaChatEventRegistry = registry;
+const pendingRecipientEvents =
+  globalForChatState.__lumaPendingRecipientEvents ??
+  new Map<string, Map<string, QueuedEvent[]>>();
+globalForChatState.__lumaPendingRecipientEvents = pendingRecipientEvents;
+
+const roomCanvasLogs =
+  globalForChatState.__lumaRoomCanvasLogs ??
+  new Map<string, QueuedCanvasEnvelope[]>();
+globalForChatState.__lumaRoomCanvasLogs = roomCanvasLogs;
+
+const registry =
+  globalForChatState.__lumaChatEventRegistry ??
+  new Map<string, ParticipantListeners>();
+globalForChatState.__lumaChatEventRegistry = registry;
+
+function enqueueRecipientEvent(
+  roomId: string,
+  recipientAccessHash: string,
+  event: LiveChatEvent,
+) {
+  const now = Date.now();
+  const roomQueues =
+    pendingRecipientEvents.get(roomId) ?? new Map<string, QueuedEvent[]>();
+  const fresh = (roomQueues.get(recipientAccessHash) ?? []).filter(
+    (entry) => entry.expiresAt > now,
+  );
+  fresh.push({ event, expiresAt: now + TRANSIENT_TTL_MS });
+  roomQueues.set(recipientAccessHash, fresh.slice(-MAX_QUEUED_EVENTS));
+  pendingRecipientEvents.set(roomId, roomQueues);
+}
+
+function sendOrQueue(
+  roomId: string,
+  recipientAccessHash: string,
+  event: LiveChatEvent,
+) {
+  const listeners = registry.get(roomId)?.get(recipientAccessHash);
+  if (listeners?.size) {
+    for (const listener of listeners) listener(event);
+    return;
+  }
+  enqueueRecipientEvent(roomId, recipientAccessHash, event);
+}
 
 function notifyPeerState(roomId: string) {
   const participants = registry.get(roomId);
@@ -68,17 +119,20 @@ export function publishChatMessage(
   roomId: string,
   senderClientId: string,
   message: EncryptedMessageEnvelope,
+  recipientClientId?: string,
 ) {
   const participants = registry.get(roomId);
-  const hasPeer = participants
-    ? Array.from(participants.keys()).some((clientId) => clientId !== senderClientId)
-    : false;
-  if (!participants || !hasPeer) return false;
-  const recipientAccessHash = Array.from(participants.keys()).find(
-    (clientId) => clientId !== senderClientId,
-  );
+  const recipientAccessHash =
+    recipientClientId ??
+    (participants
+      ? Array.from(participants.keys()).find(
+          (clientId) => clientId !== senderClientId,
+        )
+      : undefined);
   if (!recipientAccessHash) return false;
-  const roomPending = pendingDeliveries.get(roomId) ?? new Map<string, PendingDelivery>();
+
+  const roomPending =
+    pendingDeliveries.get(roomId) ?? new Map<string, PendingDelivery>();
   const now = Date.now();
   for (const [id, pending] of roomPending) {
     if (pending.expiresAt <= now) roomPending.delete(id);
@@ -86,12 +140,16 @@ export function publishChatMessage(
   roomPending.set(message.id, {
     senderAccessHash: senderClientId,
     recipientAccessHash,
-    expiresAt: now + 10 * 60_000,
+    expiresAt: now + TRANSIENT_TTL_MS,
   });
   pendingDeliveries.set(roomId, roomPending);
-  for (const listeners of participants.values()) {
-    for (const listener of listeners) listener({ type: "message", message });
+
+  const event: LiveChatEvent = { type: "message", message };
+  const senderListeners = participants?.get(senderClientId);
+  if (senderListeners) {
+    for (const listener of senderListeners) listener(event);
   }
+  sendOrQueue(roomId, recipientAccessHash, event);
   return true;
 }
 
@@ -110,35 +168,14 @@ export function acknowledgeChatMessage(
   roomPending.delete(messageId);
   if (roomPending.size === 0) pendingDeliveries.delete(roomId);
 
-  const participants = registry.get(roomId);
-  const senderListeners = participants?.get(pending.senderAccessHash);
-  if (!senderListeners?.size) return false;
-  for (const listener of senderListeners) {
-    listener({ type: "ack", messageId, recipientPublicId, receivedAt, signature });
-  }
+  sendOrQueue(roomId, pending.senderAccessHash, {
+    type: "ack",
+    messageId,
+    recipientPublicId,
+    receivedAt,
+    signature,
+  });
   return true;
-}
-
-export function countParticipantStreams(roomId: string, clientId: string) {
-  return registry.get(roomId)?.get(clientId)?.size ?? 0;
-}
-
-export function publishCanvasEvent(
-  roomId: string,
-  senderAccessHash: string,
-  envelope: CanvasEnvelope,
-) {
-  const participants = registry.get(roomId);
-  if (!participants) return false;
-  let delivered = false;
-  for (const [clientId, listeners] of participants) {
-    if (clientId === senderAccessHash) continue;
-    for (const listener of listeners) {
-      listener({ type: "canvas", envelope });
-      delivered = true;
-    }
-  }
-  return delivered;
 }
 
 export function publishReadReceipt(
@@ -148,25 +185,89 @@ export function publishReadReceipt(
   recipientPublicId: string,
   readAt: string,
   signature: string,
+  peerAccessHash?: string,
 ) {
+  const event: LiveChatEvent = {
+    type: "read",
+    messageId,
+    recipientPublicId,
+    readAt,
+    signature,
+  };
   const participants = registry.get(roomId);
-  if (!participants) return false;
   let delivered = false;
-  for (const [clientId, listeners] of participants) {
-    if (clientId === senderAccessHash) continue;
-    for (const listener of listeners) {
-      listener({ type: "read", messageId, recipientPublicId, readAt, signature });
-      delivered = true;
+  if (participants) {
+    for (const [clientId, listeners] of participants) {
+      if (clientId === senderAccessHash) continue;
+      for (const listener of listeners) {
+        listener(event);
+        delivered = true;
+      }
     }
+  }
+  if (!delivered && peerAccessHash) {
+    enqueueRecipientEvent(roomId, peerAccessHash, event);
+    return true;
   }
   return delivered;
 }
 
+export function publishCanvasEvent(
+  roomId: string,
+  senderAccessHash: string,
+  envelope: CanvasEnvelope,
+) {
+  const now = Date.now();
+  let entries = (roomCanvasLogs.get(roomId) ?? []).filter(
+    (item) => item.expiresAt > now,
+  );
+  if (envelope.eventType === "disable" || envelope.eventType === "decline") {
+    entries = entries.filter(
+      (item) => item.envelope.sessionId !== envelope.sessionId,
+    );
+  }
+  entries.push({ envelope, expiresAt: now + TRANSIENT_TTL_MS });
+  if (entries.length > MAX_ROOM_CANVAS_EVENTS) {
+    const control = entries.filter(
+      (item) =>
+        item.envelope.eventType === "invite" ||
+        item.envelope.eventType === "accept",
+    );
+    const rest = entries
+      .filter(
+        (item) =>
+          item.envelope.eventType !== "invite" &&
+          item.envelope.eventType !== "accept",
+      )
+      .slice(-(MAX_ROOM_CANVAS_EVENTS - control.length));
+    entries = [...control, ...rest];
+  }
+  roomCanvasLogs.set(roomId, entries);
+
+  const participants = registry.get(roomId);
+  if (participants) {
+    for (const [clientId, listeners] of participants) {
+      if (clientId === senderAccessHash) continue;
+      for (const listener of listeners) {
+        listener({ type: "canvas", envelope });
+      }
+    }
+  }
+  return true;
+}
+
+export function countParticipantStreams(roomId: string, clientId: string) {
+  return registry.get(roomId)?.get(clientId)?.size ?? 0;
+}
+
 /**
- * Tell every connected participant that the room was closed elsewhere, so the
- * partner does not keep a composer open until the next slow status poll.
+ * Tell every connected participant that the room was closed elsewhere, and
+ * erase all transient encrypted message/canvas state for the ended room.
  */
 export function notifyRoomEnded(roomId: string) {
+  pendingDeliveries.delete(roomId);
+  pendingRecipientEvents.delete(roomId);
+  roomCanvasLogs.delete(roomId);
   const participants = registry.get(roomId);
   if (!participants) return;
   for (const listeners of participants.values()) {
@@ -174,11 +275,6 @@ export function notifyRoomEnded(roomId: string) {
   }
 }
 
-/**
- * Relay an ephemeral typing signal to the other participant only. Typing state
- * is never stored and never leaves this process, matching the "text only,
- * server-blind content" design.
- */
 export function publishTypingState(
   roomId: string,
   senderAccessHash: string,
@@ -203,12 +299,37 @@ export function subscribeToChatMessages(
   clientId: string,
   listener: ChatEventListener,
 ) {
-  const participants = registry.get(roomId) ?? new Map<string, Set<ChatEventListener>>();
+  const participants =
+    registry.get(roomId) ?? new Map<string, Set<ChatEventListener>>();
   const listeners = participants.get(clientId) ?? new Set<ChatEventListener>();
   listeners.add(listener);
   participants.set(clientId, listeners);
   registry.set(roomId, participants);
   notifyPeerState(roomId);
+
+  const now = Date.now();
+  const roomQueues = pendingRecipientEvents.get(roomId);
+  const queued = roomQueues?.get(clientId);
+  if (roomQueues && queued) {
+    roomQueues.delete(clientId);
+    if (roomQueues.size === 0) pendingRecipientEvents.delete(roomId);
+    for (const item of queued) {
+      if (item.expiresAt > now) listener(item.event);
+    }
+  }
+
+  const canvasEntries = roomCanvasLogs.get(roomId);
+  if (canvasEntries?.length) {
+    const fresh = canvasEntries.filter((item) => item.expiresAt > now);
+    if (fresh.length === 0) {
+      roomCanvasLogs.delete(roomId);
+    } else {
+      roomCanvasLogs.set(roomId, fresh);
+      for (const item of fresh) {
+        listener({ type: "canvas", envelope: item.envelope });
+      }
+    }
+  }
 
   return () => {
     listeners.delete(listener);
