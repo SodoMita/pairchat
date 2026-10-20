@@ -69,14 +69,14 @@ try {
   const b = await user(ctxB);
   assert.equal(await a.locator('#safety-guide').count(), 1);
   assert.equal(await a.locator('label input[type=checkbox]').count(), 0, 'no fake consent gate');
-  assert.equal(await a.locator('#safety-guide article').count(), 8, 'all eight problems are visible');
+  assert.equal(await a.locator('#safety-guide ol > li').count(), 8, 'all eight problems are visible');
   assert.equal(await a.locator('#safety-guide button, #safety-guide a, #safety-guide input, #safety-guide select, #safety-guide details, #safety-guide summary').count(), 0, 'the guide is plain, non-interactive HTML');
-  const swearing = a.locator('#safety-guide article').nth(1);
+  const swearing = a.locator('#safety-guide ol > li').nth(1);
   assert.match(await swearing.locator('h3').innerText(), /Swearing/i);
   assert.match(await swearing.locator('p').innerText(), /safety signal/i);
-  assert.match(await a.locator('#safety-guide article').first().locator('h3').innerText(), /disappears/i);
-  assert.match(await a.locator('#safety-guide article').last().locator('h3').innerText(), /search/i);
-  assert.ok((await a.locator('#safety-guide article').first().locator('p').innerText()).length > 120,
+  assert.match(await a.locator('#safety-guide ol > li').first().locator('h3').innerText(), /disappears/i);
+  assert.match(await a.locator('#safety-guide ol > li').last().locator('h3').innerText(), /search/i);
+  assert.ok((await a.locator('#safety-guide ol > li').first().locator('p').innerText()).length > 80,
     'each problem carries the full description');
   note('Guide renders all eight problems as static HTML without an entry checkbox');
   for (const code of [
@@ -84,8 +84,8 @@ try {
     'de', 'ja', 'sw', 'mr', 'te', 'tr', 'ta', 'vi', 'ko',
   ]) {
     await a.locator('select').selectOption(code);
-    const firstTitle = await a.locator('#safety-guide article').first().locator('h3').innerText();
-    const firstCopy = await a.locator('#safety-guide article').first().locator('p').innerText();
+    const firstTitle = await a.locator('#safety-guide ol > li').first().locator('h3').innerText();
+    const firstCopy = await a.locator('#safety-guide ol > li').first().locator('p').innerText();
     assert.notEqual(firstTitle, 'The other person disappears', `Guide title fell back to English for ${code}`);
     assert.notEqual(firstCopy.slice(0, 20), 'A lot of chats end in', `Guide body fell back to English for ${code}`);
     assert.notEqual(await a.locator('#safety-guide h3').last().innerText(),

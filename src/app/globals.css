@@ -20,6 +20,8 @@ body {
   color: var(--foreground);
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 button,
@@ -41,15 +43,6 @@ textarea:focus-visible {
 
 button:not(:disabled) {
   cursor: pointer;
-}
-
-button,
-a,
-p,
-h1,
-h2,
-span {
-  overflow-wrap: anywhere;
 }
 
 .language-select::after {
