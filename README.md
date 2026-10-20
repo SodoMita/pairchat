@@ -1,12 +1,8 @@
 # Luma — anonymous text chat roulette
 
-> **Preview:** https://3000-itden3yk7rin9ufs1q9gg.e2b.app
+> **Preview URLs are temporary.** Use the live E2B link in the latest handoff; an older preview URL may no longer host a running app. The default GitHub branch is `main`.
 
-The live host changes when the sandbox restarts. The repository itself stays at
-https://github.com/SodoMita/pairchat
-
-Luma is a calm, anonymous one-to-one text chat. Meet a random stranger in seconds or create a
-private invite link for exactly one friend. No profiles, no accounts, no images or calls.
+Luma is a calm, anonymous one-to-one text chat. Meet another person who is searching at the same time, or create a private invite link for exactly one friend. Waiting depends on whether someone else is online. No profiles, no accounts, no images or calls.
 
 - **End-to-end encrypted** with browser-generated P-256 ECDH + AES-256-GCM and ECDSA-signed
   envelopes. The relay cannot read message plaintext (`SECURITY.md` describes the model).
@@ -52,48 +48,48 @@ The API surface is `/api/health`, `/api/match`, `/api/rooms` and
 `/api/rooms/[roomId]/{join,keys,messages,events,typing,ack,report}`. Every mutation requires a
 same-origin JSON request and a participant bearer credential.
 
-## What changed in this iteration
+## Connection reliability and what to expect
 
-- **Sounds work.** A small Web Audio engine (`src/lib/sound.ts`) creates notification tones for
-  sent / received / matched / ended / error states. The audio context is unlocked by the first
-  user gesture, resumes after tab suspension, and the mute preference is stored in
-  `localStorage`. A header button toggles sound anywhere in the app, and turning it back on plays
-  a confirmation tone so people can verify their device volume.
-- **Everything is translated.** The original dictionaries were missing the report flow, local
-  history controls and safety copy in all 19 non-English languages. The gaps are now filled for
-  every locale, including the new community safety guide and sound/typing strings.
-- **The wording is localized even on failure.** Server error strings no longer leak raw English
-  into localized error screens or chat toasts.
-- **Typing indicators.** The unused typing endpoint is now wired end-to-end; typing state is
-  ephemeral, never stored, and relayed only to the peer.
-- **Instant end notification.** Leaving a chat broadcasts an `ended` relay event so the partner's
-  composer closes immediately instead of waiting for the 20-second status poll.
-- **Broken invite route fixed.** The dynamic `/r/[roomId]` page contradicted the static invite
-  shell rewrite and failed type checking; it is removed so `/r/:roomId` is served by the
-  prerendered invite shell as designed.
-- **In-chat errors are visible.** Failed sends and relay problems surface as a dismissible toast
-  with a localized message; a failed match returns to the home screen instead of an English-only
-  error page.
-- **Community safety guide.** The home page now explains the real-world problems of anonymous chat
-  (ghosting, scams, harassment, sexual pressure, privacy requests, bots, minors/self-harm,
-  screenshots/consent) with a short reaction protocol, translated into all 20 languages.
-- **Kept random chats resume locally.** Reopening a saved stranger chat reconnects from the local
-  encrypted state instead of failing through the private-invite join path.
+- A stranger chat needs **two different browser sessions searching at the same time**. The
+  matching screen says so and offers a private invite while the queue is empty. Two tabs in the
+  same browser share one session and cannot be matched to each other.
+- Closing or reloading during a search no longer silently strands the browser in a 429
+  "already waiting" state. A saved waiting seat is resumed with its original encryption key;
+  if that key has been lost, a fresh search replaces the *waiting* seat without claiming it.
+  Only recently checked-in waiting users are offered to a partner.
+- A match updates local state in both tabs. One tab can no longer mistake the other tab's
+  "active" update for a lost key and DELETE the matched conversation.
+- End & find next waits for the server to confirm the old room ended before requesting a new
+  one. Failed cleanup does not discard the only local key for a still-open room.
+- Search expiry, rate limits, an offline partner, and a blocked browser storage API now have
+  visible, translated explanations. Cancelled searches cannot reopen from late responses.
+- On a fresh PostgreSQL database, the first request provisions the tables with Drizzle DDL;
+  `/api/health` checks real chat tables instead of merely executing `SELECT 1`. Old raw room
+  credentials are hashed during this awaited setup, while legacy peer credentials are removed
+  from local transcripts. For upgrades of an existing schema, run `npx drizzle-kit push`.
+- Matching and private-room creation are limited per anonymous browser session, not by a small
+  IP-only bucket that all visitors might share when a proxy omits the client address. The
+  proof-of-work challenge and contact budget still apply to unusually rapid matching.
+- Notification sounds, encrypted delivery receipts, typing signals and the translated safety
+  guide remain available. All nine common problems—including swearing—show their causes,
+  possible consequences and responses directly in plain HTML. The guide has no accordion,
+  show-more control, or checkbox gating entry; reading it is optional.
+
+This MVP still uses a **single in-memory relay process**. Running multiple workers requires a
+shared pub/sub and room-affine routing for SSE events; see `SECURITY.md`.
 
 ## Verification
 
-- `npx next typegen`, `npx tsc --noEmit` and `npm run build` pass.
-- A Playwright run with two isolated browser contexts verifies: matching, encrypted message
-  delivery in both directions, typing indicator, sound generation on match/receive, mute
-  persistence, report flow, instant peer disconnect after "End chat", localized hero/guide copy,
-  RTL switching, and zero browser console errors.
-- A Node integration script verifies the relay contract directly: health, stranger matching,
-  SSE peer/typing/ended events, signature rejection, AES-GCM decrypt equality, signed delivery
-  ACKs, content-free reports, the `/r/:roomId` invite shell, wrong-secret rejection and the private
-  room join/message/leave flow.
+The browser regression script covers: a 31-second wait followed by a real match, bidirectional
+end-to-end messages and receipts, reload and lost-key recovery, same-browser tabs, private
+invites, localized rate-limit feedback, blocked storage, and an end-then-next transition. It
+uses its own browser profiles; run it on a test instance, not against other people's rooms.
 
 ```bash
-BASE=https://your-preview-host node scripts/browser-check.mjs
+npm i --no-save playwright
+npx playwright install --with-deps chromium
+BASE=http://localhost:3000 node scripts/browser-check.mjs
+npx next typegen && npx tsc --noEmit && npm run build
 ```
 
 ## What actually happens in random anonymous chats (and why)

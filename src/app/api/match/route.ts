@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { ensureChatSchema } from "@/db/ensure";
 import { abuseSignals, chatParticipants, chatReports, chatRooms } from "@/db/schema";
 import {
   createRoomId,
@@ -37,9 +38,6 @@ export async function POST(request: NextRequest) {
   if (!isTrustedJsonMutation(request)) {
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
-  if (!allowRequest(`match-post:${requestClientAddress(request)}`, 30, 60_000)) {
-    return NextResponse.json({ error: "Too many match requests." }, { status: 429 });
-  }
   const body = await readLimitedJson(request);
   const clientId = bearerCredential(request);
   const abuseSession = abuseSessionCredential(request);
@@ -55,11 +53,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid encrypted chat identity." }, { status: 400 });
   }
 
+  await ensureChatSchema();
   const accessHash = hashAccessCredential(clientId);
   const abuseSessionHash = hashAccessCredential(abuseSession);
+  // Some reverse proxies do not forward a client address. An address-only
+  // bucket would then be shared by *every* visitor as "unknown".
+  if (!allowRequest(`match-post:${requestClientAddress(request)}:${abuseSessionHash}`, 30, 60_000)) {
+    return NextResponse.json(
+      { code: "request-limit", error: "Too many match requests." },
+      { status: 429 },
+    );
+  }
 
   // Normal use gets a quiet budget; bursts must solve a local proof-of-work
   // challenge issued and verified by this server. No third-party scripts.
+  // A few retries after cancelling a search should not immediately force a
+  // proof-of-work challenge (the stricter 3-attempt budget broke normal use).
   const withinQuietBudget = allowRequest(`match-quiet:${abuseSessionHash}`, 24, 10 * 60_000);
   if (!withinQuietBudget) {
     const challengeSolved = verifyAdmissionChallenge(body?.challenge, abuseSessionHash);
@@ -76,17 +85,32 @@ export async function POST(request: NextRequest) {
 
   const roomId = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(7402181)`);
+    // A hidden/closed search stops polling. Close its seat before it can be
+    // matched to a stranger who would otherwise wait for a non-existent peer.
     await tx.execute(sql`
       update chat_rooms as rooms
       set status = 'ended', ended_at = now(), updated_at = now()
       where rooms.kind = 'random'
         and rooms.status = 'waiting'
         and not exists (
-          select 1
-          from chat_participants as waiting_participant
-          where waiting_participant.room_id = rooms.id
-            and waiting_participant.left_at is null
-            and waiting_participant.last_seen_at > now() - interval '90 seconds'
+          select 1 from chat_participants as member
+          where member.room_id = rooms.id
+            and member.left_at is null
+            and member.last_seen_at > now() - interval '90 seconds'
+        )
+    `);
+    // Back-to-chats does not keep a relay open. Forgotten active rooms must
+    // stop consuming the per-browser active-room limit indefinitely.
+    await tx.execute(sql`
+      update chat_rooms as room
+      set status = 'ended', ended_at = now(), updated_at = now()
+      where room.kind = 'random'
+        and room.status = 'active'
+        and not exists (
+          select 1 from chat_participants as member
+          where member.room_id = room.id
+            and member.left_at is null
+            and member.last_seen_at > now() - interval '2 minutes'
         )
     `);
     await tx.execute(sql`
@@ -150,6 +174,45 @@ export async function POST(request: NextRequest) {
       return "session-cooldown" as const;
     }
 
+    const [sessionWaiting] = await tx
+      .select({ roomId: chatRooms.id })
+      .from(chatParticipants)
+      .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
+      .where(
+        and(
+          eq(chatParticipants.abuseSessionHash, abuseSessionHash),
+          eq(chatRooms.kind, "random"),
+          eq(chatRooms.status, "waiting"),
+          isNull(chatParticipants.leftAt),
+        ),
+      )
+      .limit(1);
+    if (sessionWaiting) {
+      // The user may have reloaded or lost the local capability for this
+      // waiting seat. Their high-entropy abuse session authorizes closing the
+      // old *waiting* room, never claiming its participant credential. The
+      // old tab will get room:null from GET and stop searching.
+      await tx
+        .update(chatParticipants)
+        .set({ leftAt: now, lastSeenAt: now })
+        .where(
+          and(
+            eq(chatParticipants.roomId, sessionWaiting.roomId),
+            eq(chatParticipants.abuseSessionHash, abuseSessionHash),
+            isNull(chatParticipants.leftAt),
+          ),
+        );
+      await tx
+        .update(chatRooms)
+        .set({ status: "ended", endedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(chatRooms.id, sessionWaiting.roomId),
+            eq(chatRooms.status, "waiting"),
+          ),
+        );
+    }
+
     const activeRooms = await tx
       .select({ roomId: chatRooms.id })
       .from(chatParticipants)
@@ -174,9 +237,15 @@ export async function POST(request: NextRequest) {
           eq(chatParticipants.abuseSessionHash, abuseSessionHash),
           eq(chatRooms.kind, "random"),
           sql`${chatParticipants.joinedAt} > now() - interval '1 hour'`,
+          // A cancelled/expired wait is not a meeting. Count only rooms with
+          // an actual second seat, even if the conversation later ended.
+          sql`exists (
+            select 1 from chat_participants as peer
+            where peer.room_id = ${chatParticipants.roomId} and peer.seat = 2
+          )`,
         ),
       );
-    if (recentContacts >= 60) return "contact-budget" as const;
+    if (recentContacts >= 20) return "contact-budget" as const;
 
     const [waiting] = await tx
       .select({ roomId: chatRooms.id })
@@ -196,13 +265,11 @@ export async function POST(request: NextRequest) {
           isNotNull(chatParticipants.publicKey),
           isNotNull(chatParticipants.signingKey),
           ne(chatParticipants.clientId, accessHash),
+          ne(chatParticipants.abuseSessionHash, abuseSessionHash),
           sql`${chatParticipants.lastSeenAt} > now() - interval '45 seconds'`,
         ),
       )
-      .orderBy(
-        sql`case when ${chatParticipants.abuseSessionHash} = ${abuseSessionHash} then 1 else 0 end`,
-        asc(chatRooms.createdAt),
-      )
+      .orderBy(asc(chatRooms.createdAt))
       .limit(1);
 
     if (waiting) {
@@ -220,19 +287,6 @@ export async function POST(request: NextRequest) {
         .where(eq(chatRooms.id, waiting.roomId));
       return waiting.roomId;
     }
-
-    await tx.execute(sql`
-      update chat_rooms
-      set status = 'ended', ended_at = now(), updated_at = now()
-      where kind = 'random'
-        and status = 'waiting'
-        and id in (
-          select room_id
-          from chat_participants
-          where abuse_session_hash = ${abuseSessionHash}
-            and left_at is null
-        )
-    `);
 
     const id = createRoomId("random");
     await tx.insert(chatRooms).values({ id, kind: "random" });
@@ -255,25 +309,25 @@ export async function POST(request: NextRequest) {
   }
   if (roomId === "session-cooldown") {
     return NextResponse.json(
-      { error: "Matching is temporarily paused for this browser." },
+      { code: "cooldown", error: "Matching is temporarily paused for this browser." },
       { status: 429 },
     );
   }
   if (roomId === "contact-budget") {
     return NextResponse.json(
-      { error: "This browser has met new strangers too quickly. Please try again later." },
-      { status: 429 },
-    );
-  }
-  if (roomId === "session-waiting") {
-    return NextResponse.json(
-      { error: "This browser already has a stranger chat waiting." },
+      {
+        code: "contact-limit",
+        error: "This browser has met new strangers too quickly. Please try again later.",
+      },
       { status: 429 },
     );
   }
   if (roomId === "session-limit") {
     return NextResponse.json(
-      { error: "This browser has reached the active stranger chat limit." },
+      {
+        code: "active-limit",
+        error: "This browser has reached the active stranger chat limit.",
+      },
       { status: 429 },
     );
   }
@@ -287,6 +341,7 @@ export async function GET(request: NextRequest) {
   if (!isValidClientId(clientId)) {
     return NextResponse.json({ error: "Invalid chat identity." }, { status: 400 });
   }
+  await ensureChatSchema();
   const accessHash = hashAccessCredential(clientId);
   if (!allowRequest(`match-poll:${requestClientAddress(request)}:${accessHash}`, 180, 60_000)) {
     return NextResponse.json({ error: "Too many polling requests." }, { status: 429 });

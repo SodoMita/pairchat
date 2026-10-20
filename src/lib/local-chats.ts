@@ -4,6 +4,42 @@ export const LOCAL_CHATS_KEY = "luma-local-chats-v1";
 export const LOCAL_ABUSE_SESSION_KEY = "luma-abuse-session-v1";
 export const MAX_LOCAL_MESSAGES = 500;
 
+// Some embedded/private browsers deny localStorage or throw QuotaExceededError.
+// Keep the current tab usable without pretending its transcript is durable.
+const memoryFallback = new Map<string, string>();
+let storageWriteFailed = false;
+
+function readStored(key: string): string | null {
+  if (memoryFallback.has(key)) return memoryFallback.get(key) ?? null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+    memoryFallback.delete(key);
+  } catch {
+    storageWriteFailed = true;
+    memoryFallback.set(key, value);
+  }
+}
+
+export function isLocalHistoryPersistent(): boolean {
+  if (storageWriteFailed) return false;
+  try {
+    const key = "luma-storage-check";
+    window.localStorage.setItem(key, "ok");
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type LocalChatMessage = {
   id: string;
   body: string;
@@ -104,8 +140,8 @@ function stripLegacyCredentials(value: unknown): unknown {
     ...conversation,
     messages: conversation.messages.map((message) => {
       if (!message || typeof message !== "object") return message;
-      const { senderClientId: _dropped, ...rest } = message as { senderClientId?: string };
-      return rest;
+      const { senderClientId: _dropped, ...safeMessage } = message as { senderClientId?: string };
+      return safeMessage;
     }),
   };
 }
@@ -113,18 +149,16 @@ function stripLegacyCredentials(value: unknown): unknown {
 export function loadLocalConversations(): LocalConversation[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = JSON.parse(window.localStorage.getItem(LOCAL_CHATS_KEY) ?? "[]") as unknown;
+    const raw = JSON.parse(readStored(LOCAL_CHATS_KEY) ?? "[]") as unknown;
     if (!Array.isArray(raw)) return [];
     const hadLegacyCredential = raw.some((item) => {
       if (!item || typeof item !== "object") return false;
       const messages = (item as { messages?: unknown[] }).messages;
-      return Array.isArray(messages) && messages.some((message) => {
-        if (!message || typeof message !== "object") return false;
-        return "senderClientId" in message;
-      });
+      return Array.isArray(messages) && messages.some(
+        (message) => !!message && typeof message === "object" && "senderClientId" in message,
+      );
     });
-    const stripped = raw.map(stripLegacyCredentials);
-    const conversations = stripped
+    const conversations = raw.map(stripLegacyCredentials)
       .filter(isConversation)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     if (hadLegacyCredential || conversations.length !== raw.length) {
@@ -138,7 +172,7 @@ export function loadLocalConversations(): LocalConversation[] {
 
 function writeLocalConversations(conversations: LocalConversation[]) {
   const sorted = [...conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  window.localStorage.setItem(LOCAL_CHATS_KEY, JSON.stringify(sorted));
+  writeStored(LOCAL_CHATS_KEY, JSON.stringify(sorted));
   return sorted;
 }
 
@@ -284,7 +318,7 @@ export function getOrCreateAbuseSession() {
   if (typeof window === "undefined") return "";
   try {
     const existing = JSON.parse(
-      window.localStorage.getItem(LOCAL_ABUSE_SESSION_KEY) ?? "null",
+      readStored(LOCAL_ABUSE_SESSION_KEY) ?? "null",
     ) as { token?: string; expiresAt?: number } | null;
     if (
       existing &&
@@ -303,7 +337,7 @@ export function getOrCreateAbuseSession() {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   const token = `as_${btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "")}`;
-  window.localStorage.setItem(
+  writeStored(
     LOCAL_ABUSE_SESSION_KEY,
     JSON.stringify({ token, expiresAt: Date.now() + 24 * 60 * 60_000 }),
   );

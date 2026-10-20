@@ -22,27 +22,3 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export const db = drizzle(pool);
-
-let credentialMigration: Promise<void> | null = null;
-
-/** Hash pre-deploy raw bearer credentials in place so old rooms stay reachable. */
-export function migrateStoredCredentials() {
-  credentialMigration ??= (async () => {
-    try {
-      await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
-    } catch {
-      // Parallel workers can race on the extension catalog; the extension is still usable.
-    }
-    await pool.query(`
-      UPDATE chat_participants
-      SET client_id = encode(digest(convert_to(client_id, 'UTF8'), 'sha256'), 'hex')
-      WHERE client_id !~ '^[a-f0-9]{64}$'
-    `);
-  })().catch((error: unknown) => {
-    credentialMigration = null;
-    console.error("credential migration skipped", error);
-  });
-  return credentialMigration;
-}
-
-void migrateStoredCredentials();

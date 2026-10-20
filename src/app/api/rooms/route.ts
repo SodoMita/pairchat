@@ -1,14 +1,16 @@
 import { db } from "@/db";
+import { ensureChatSchema } from "@/db/ensure";
 import { chatParticipants, chatRooms } from "@/db/schema";
 import {
   createRoomId,
+  isValidAbuseSession,
   isValidClientId,
   isValidEcdsaPublicKey,
   isValidPrivateCommitment,
 } from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
 import { allowRequest } from "@/lib/rate-limit";
-import { bearerCredential, isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
+import { abuseSessionCredential, bearerCredential, isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
 import { hashAccessCredential } from "@/lib/server-credentials";
 import { sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -17,11 +19,9 @@ export async function POST(request: NextRequest) {
   if (!isTrustedJsonMutation(request)) {
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
-  if (!allowRequest(`room-create:${requestClientAddress(request)}`, 20, 60_000)) {
-    return NextResponse.json({ error: "Too many room requests." }, { status: 429 });
-  }
   const body = await readLimitedJson(request);
   const clientId = bearerCredential(request);
+  const abuseSession = abuseSessionCredential(request);
   const signingKey = body?.signingKey;
   const keyCommitment = body?.keyCommitment;
 
@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid chat identity." }, { status: 400 });
   }
 
+  await ensureChatSchema();
+  const rateIdentity = isValidAbuseSession(abuseSession)
+    ? hashAccessCredential(abuseSession)
+    : hashAccessCredential(clientId);
+  if (!allowRequest(`room-create:${requestClientAddress(request)}:${rateIdentity}`, 20, 60_000)) {
+    return NextResponse.json({ error: "Too many room requests." }, { status: 429 });
+  }
   const roomId = createRoomId("private");
   await db.transaction(async (tx) => {
     await tx.execute(sql`

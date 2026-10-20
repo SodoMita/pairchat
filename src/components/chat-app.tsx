@@ -32,6 +32,7 @@ import {
   createParticipantId,
   deleteLocalConversation,
   getOrCreateAbuseSession,
+  isLocalHistoryPersistent,
   loadLocalConversations,
   LOCAL_CHATS_KEY,
   markLocalMessageDelivered,
@@ -84,6 +85,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FormEvent,
@@ -96,9 +98,40 @@ import {
 
 type ChatMessage = LocalChatMessage;
 
+function sameRoomConnection(a: RoomSnapshot, b: RoomSnapshot) {
+  return a.id === b.id && a.status === b.status &&
+    a.participantActive === b.participantActive &&
+    a.participantPublicId === b.participantPublicId &&
+    a.partnerPresent === b.partnerPresent &&
+    a.partnerPublicId === b.partnerPublicId &&
+    a.partnerPublicKey === b.partnerPublicKey &&
+    a.partnerSigningKey === b.partnerSigningKey;
+}
+
 type Screen = "home" | "matching" | "chat" | "loading" | "error";
 type ServiceStatus = "checking" | "active" | "unavailable";
 type Translator = (key: TranslationKey) => string;
+
+class ChatRequestError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string = "unknown",
+  ) {
+    super(`Chat request failed (${status}: ${code})`);
+  }
+}
+
+function matchErrorKey(error: unknown): TranslationKey {
+  if (error instanceof ChatRequestError) {
+    if (error.code === "cooldown") return "matchCooldown";
+    if (error.code === "contact-limit") return "matchContactLimit";
+    if (error.code === "active-limit") return "matchActiveLimit";
+    if (error.code === "request-limit") return "matchRateLimit";
+    if (error.status >= 500) return "matchNetworkError";
+    return "couldNotStart";
+  }
+  return "matchNetworkError";
+}
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -107,9 +140,9 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   const payload = (await response.json().catch(() => ({}))) as T & {
-    error?: string;
+    code?: string;
   };
-  if (!response.ok) throw new Error(payload.error || "Something went wrong.");
+  if (!response.ok) throw new ChatRequestError(response.status, payload.code);
   return payload;
 }
 
@@ -126,22 +159,34 @@ async function requestMatch(
         Authorization: `Bearer ${participantId}`,
         "X-Luma-Abuse-Session": abuseSession,
       },
-      cache: "no-store",
-      body: JSON.stringify(challenge ? { ...keys, challenge } : keys),
-    });
+       cache: "no-store",
+       signal: AbortSignal.timeout(15000),
+       body: JSON.stringify(challenge ? { ...keys, challenge } : keys),
+     });
 
   let response = await send();
   if (response.status === 428) {
     const payload = (await response.json().catch(() => ({}))) as { challenge?: unknown };
     if (!isClientAdmissionChallenge(payload.challenge)) {
-      throw new Error("Admission check unavailable.");
+      throw new ChatRequestError(428);
     }
     const solved = await solveAdmissionChallenge(payload.challenge);
     response = await send(solved);
   }
-  const data = (await response.json().catch(() => ({}))) as { room?: RoomSnapshot; error?: string };
-  if (!response.ok || !data.room) throw new Error(data.error || "Could not find a chat.");
+  const data = (await response.json().catch(() => ({}))) as { room?: RoomSnapshot; code?: string };
+  if (!response.ok || !data.room) {
+    throw new ChatRequestError(response.status, data.code);
+  }
   return { room: data.room };
+}
+
+async function endRemoteRoom(roomId: string, participantId: string) {
+  await requestJson<{ ok: boolean }>(`/api/rooms/${roomId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${participantId}` },
+    body: "{}",
+    signal: AbortSignal.timeout(8000),
+  });
 }
 
 function Brand() {
@@ -203,9 +248,9 @@ function Header({
       {inRoom ? (
         <div className="shrink-0" aria-label="Luma"><Brand /></div>
       ) : (
-        <a href="/" className="shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff6747]/40">
+        <Link href="/" className="shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ff6747]/40">
           <Brand />
-        </a>
+        </Link>
       )}
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-5">
         {!inRoom && (
@@ -319,9 +364,9 @@ function ConversationSidebar({
           const active = conversation.status !== "ended";
           const selected = conversation.roomId === currentRoomId;
           const lastMessage = conversation.messages.at(-1);
-          const statusLabel = conversation.status === "active"
-            ? t("connected")
-            : conversation.status === "waiting"
+           const statusLabel = conversation.status === "active"
+             ? t("yourConversation")
+             : conversation.status === "waiting"
               ? t("waitingSomeone")
               : t("conversationEnded");
           return (
@@ -383,6 +428,9 @@ function HomeScreen({
   onDeleteHistory,
   soundEnabled,
   onToggleSound,
+  homeNotice,
+  onDismissNotice,
+  storagePersistent,
 }: {
   onRandom: () => void;
   onPrivate: () => void;
@@ -396,9 +444,12 @@ function HomeScreen({
   onDeleteHistory: (conversation: LocalConversation) => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  homeNotice: TranslationKey | null;
+  onDismissNotice: () => void;
+  storagePersistent: boolean;
 }) {
   const features = [
-    [Zap, t("instantTitle"), t("instantCopy")],
+    [Zap, t("matchingLive"), t("queueFeatureCopy")],
     [LockKeyhole, t("privateTitle"), t("privateCopy")],
     [Link2, t("linkTitle"), t("linkCopy")],
   ] as const;
@@ -459,7 +510,18 @@ function HomeScreen({
               {t("heroLead")} <span className="relative text-[#ff6747]">{t("heroAccent")}<svg className="absolute -bottom-2 start-1 w-[96%]" viewBox="0 0 240 12" fill="none" aria-hidden="true"><path d="M3 8C62 2 158 2 237 6" stroke="#ffb39f" strokeWidth="5" strokeLinecap="round" /></svg></span>
             </h1>
             <p className="mt-7 max-w-[530px] text-[17px] leading-[1.75] text-[#68716e] sm:text-[18px]">{t("heroCopy")}</p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            {homeNotice && (
+              <div role="alert" className="mt-5 flex max-w-[530px] items-start gap-2 rounded-xl border border-[#f0d3c8] bg-[#fff4ee] px-4 py-3 text-[12px] leading-5 text-[#944f3e]">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <span className="flex-1">{t(homeNotice)}</span>
+                <button type="button" onClick={onDismissNotice} aria-label={t("cancel")} className="rounded p-0.5 hover:bg-[#f9e4db]"><X size={14} /></button>
+              </div>
+            )}
+            {!storagePersistent && (
+              <p role="status" className="mt-3 max-w-[530px] rounded-xl border border-[#e5dfd0] bg-[#faf7ec] px-4 py-3 text-[11px] leading-5 text-[#75664d]">{t("storageEphemeral")}</p>
+            )}
+            <a href="#safety-guide" className="mt-6 inline-flex items-center gap-2 rounded-xl text-[11px] font-bold text-[#6c7a70] underline decoration-[#f2b7a5] decoration-2 underline-offset-4 hover:text-[#c65338]"><ShieldCheck size={15} /> {t("guideNav")} <ChevronRight size={13} className="rtl:rotate-180" /></a>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button onClick={onRandom} disabled={busy} className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-[#ff6747] px-7 text-[14px] font-extrabold text-white shadow-[0_12px_28px_rgba(255,103,71,0.24)] transition hover:-translate-y-0.5 hover:bg-[#f65c3d] disabled:opacity-60">
                 {busy ? <LoaderCircle size={18} className="animate-spin" /> : <Shuffle size={18} />}{t("chatStranger")}<ArrowRight size={17} className="transition-transform group-hover:translate-x-1 rtl:rotate-180" />
               </button>
@@ -495,24 +557,38 @@ function HomeScreen({
             <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <div className="mt-9 grid gap-4">
-            {allGuideTopics.map((topic) => {
+          <ol className="mt-9 grid gap-4 lg:grid-cols-2">
+            {allGuideTopics.map((topic, index) => {
               const ItemIcon = topic.icon;
               return (
-                <article key={topic.topicKey} className="rounded-2xl border border-[#e7e6df] bg-white/80 p-5 sm:p-6">
-                  <h3 className="flex items-center gap-3 text-[15px] font-extrabold text-[#2b3733]">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={16} /></span>
-                    {topic.title}
-                  </h3>
-                  <div className="mt-4 space-y-3 text-[13px] leading-6 text-[#3a4541]">
-                    <p><strong className="font-extrabold text-[#27322f]">{t("guideWhyLabel")}. </strong><span className="text-[#65716c]">{topic.why}</span></p>
-                    <p><strong className="font-extrabold text-[#27322f]">{t("guideConsequenceLabel")}. </strong><span className="text-[#65716c]">{topic.consequence}</span></p>
-                    <p><strong className="font-extrabold text-[#27322f]">{t("guideReasoningLabel")}. </strong><span className="text-[#65716c]">{topic.reasoning}</span></p>
-                  </div>
-                </article>
+                <li key={topic.topicKey} className="h-full">
+                  <article className="h-full rounded-2xl border border-[#e7e6df] bg-white/85 p-5 sm:p-6">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={18} /></span>
+                      <div>
+                        <span className="text-[10px] font-extrabold tabular-nums tracking-widest text-[#a5aba6]">{String(index + 1).padStart(2, "0")}</span>
+                        <h3 className="text-[14px] font-extrabold leading-5 text-[#2b3733]">{topic.title}</h3>
+                      </div>
+                    </div>
+                    <dl className="mt-5 space-y-3.5 border-t border-[#ecede6] pt-4">
+                      <div>
+                        <dt className="text-[11px] font-extrabold text-[#39443d]">{t("guideWhyLabel")}</dt>
+                        <dd className="mt-1 text-[11.5px] leading-[1.65] text-[#65716c]">{topic.why}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-extrabold text-[#39443d]">{t("guideConsequenceLabel")}</dt>
+                        <dd className="mt-1 text-[11.5px] leading-[1.65] text-[#65716c]">{topic.consequence}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-extrabold text-[#39443d]">{t("guideReasoningLabel")}</dt>
+                        <dd className="mt-1 text-[11.5px] leading-[1.65] text-[#65716c]">{topic.reasoning}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                </li>
               );
             })}
-          </div>
+          </ol>
 
           <div className="mt-8 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
             <div className="p-6 sm:p-8">
@@ -551,6 +627,9 @@ function HomeScreen({
 
 function MatchingScreen({
   onCancel,
+  onPrivate,
+  starting,
+  matchNotice,
   conversations,
   currentRoomId,
   t,
@@ -562,6 +641,9 @@ function MatchingScreen({
   onToggleSound,
 }: {
   onCancel: () => void;
+  onPrivate: () => void;
+  starting: boolean;
+  matchNotice: TranslationKey | null;
   conversations: LocalConversation[];
   currentRoomId?: string;
   t: Translator;
@@ -584,12 +666,16 @@ function MatchingScreen({
             </div>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#edf3e9] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#68815f]"><span className="h-2 w-2 animate-pulse rounded-full bg-[#79ad69]" /> {t("matchingLive")}</div>
             <h1 className="text-[clamp(2.2rem,6vw,4rem)] font-extrabold tracking-[-0.055em] text-[#202b28]">{t("matchingTitle")}</h1>
-            <p className="mx-auto mt-4 max-w-md text-[15px] leading-7 text-[#79817e]">{t("matchingCopy")}</p>
+            <p className="mx-auto mt-4 max-w-md text-[15px] leading-7 text-[#79817e]">{t("queueExplanation")}</p>
+            {matchNotice && <p role="alert" className="mx-auto mt-4 max-w-md rounded-xl border border-[#f0d3c8] bg-[#fff4ee] px-4 py-3 text-[12px] leading-5 text-[#944f3e]">{t(matchNotice)}</p>}
             <div className="mx-auto mt-9 flex max-w-sm items-center gap-3 rounded-2xl border border-[#e1e2dc] bg-white p-4 text-start shadow-[0_12px_34px_rgba(50,58,55,0.06)]">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#ef694a]"><Heart size={18} /></span>
               <p className="text-[11px] leading-5 text-[#7c8481]"><strong className="block text-[12px] text-[#3a4541]">{t("reminder")}</strong>{t("reminderCopy")}</p>
             </div>
-            <button onClick={onCancel} className="mt-8 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[12px] font-bold text-[#8a918e] transition hover:bg-white hover:text-[#3d4744]"><X size={15} /> {t("cancelSearch")}</button>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              <button onClick={onPrivate} disabled={starting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#ff6747] px-5 text-[12px] font-extrabold text-white transition hover:bg-[#ee5b3d] disabled:opacity-50"><Link2 size={15} /> {t("inviteInstead")}</button>
+              <button onClick={onCancel} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-[12px] font-bold text-[#8a918e] transition hover:bg-white hover:text-[#3d4744]"><X size={15} /> {t("cancelSearch")}</button>
+            </div>
           </div>
         </div>
       </main>
@@ -665,17 +751,23 @@ function ChatScreen({
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState(false);
   const [reportSent, setReportSent] = useState(false);
+  const [partnerUnavailable, setPartnerUnavailable] = useState(false);
   const waiting = room.status === "waiting";
   const ended = room.status === "ended" || !room.participantActive;
   const secureReady = relayReady && Boolean(safetyCode);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, waiting, ended]);
+    if (waiting || ended || relayReady) {
+      const frame = window.requestAnimationFrame(() => setPartnerUnavailable(false));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    const timeout = window.setTimeout(() => setPartnerUnavailable(true), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [room.id, waiting, ended, relayReady]);
 
   useEffect(() => {
-    if (ended) setConfirmAction(null);
-  }, [ended]);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages.length, waiting, ended]);
 
   useEffect(() => {
     if (!confirmAction) return;
@@ -762,11 +854,17 @@ function ChatScreen({
                 {room.kind === "random" && !ended && <button onClick={() => setReportOpen(true)} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${reportSent ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#fff7f4] hover:text-[#d75d44]"}`} title={reportSent ? t("reportSent") : t("report")}>{reportSent ? <Check size={14} /> : <Flag size={14} />}<span className="hidden xl:inline">{reportSent ? t("reportSent") : t("report")}</span></button>}
                 {room.kind === "random" && !ended && <button onClick={onToggleRememberRandom} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${rememberRandomHistory ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#f7f7f3]"}`} title={t("rememberRandom")}><span>{rememberRandomHistory ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}</span><span className="hidden xl:inline">{t("rememberRandom")}</span></button>}
                 {room.kind === "private" && !ended && <button onClick={onCopy} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3] sm:px-4">{copied ? <Check size={14} className="text-[#6ca45e]" /> : <Copy size={14} />}<span className="hidden sm:inline">{copied ? t("copied") : t("inviteLink")}</span></button>}
-                {room.kind === "random" && !waiting && !ended && <button onClick={() => setConfirmAction("next")} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]"><Shuffle size={14} /><span className="hidden sm:inline">{t("next")}</span></button>}
+                {room.kind === "random" && !waiting && !ended && <button onClick={() => setConfirmAction("next")} aria-label={t("next")} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]"><Shuffle size={14} /><span className="hidden sm:inline">{t("next")}</span></button>}
                 <button onClick={() => ended ? onLeave() : setConfirmAction("leave")} className="grid h-9 w-9 place-items-center rounded-xl text-[#929995] transition hover:bg-[#fff0ec] hover:text-[#e76145]" aria-label={t("leaveChat")}><LogOut size={16} /></button>
               </div>
             </div>
 
+            {room.kind === "random" && !ended && partnerUnavailable && (
+              <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#f0d4c6] bg-[#fff6ef] px-4 py-3 text-[11px] text-[#805445] sm:px-6">
+                <span>{t("peerNotConnected")}</span>
+                <button type="button" onClick={() => setConfirmAction("next")} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#ff6747] px-3 font-bold text-white hover:bg-[#ee5b3d]"><Shuffle size={13} /> {t("meetNew")}</button>
+              </div>
+            )}
             <div ref={scrollRef} className="chat-scroll flex-1 overflow-y-auto px-4 py-6 sm:px-8">
               {waiting && room.kind === "private" ? (
                 <div className="grid h-full min-h-[360px] place-items-center">
@@ -887,7 +985,7 @@ function ChatScreen({
         </div>
       )}
 
-      {confirmAction && (
+      {confirmAction && !ended && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#17211f]/45 px-5 backdrop-blur-[3px]" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setConfirmAction(null); }}>
           <section role="alertdialog" aria-modal="true" aria-labelledby="end-chat-title" aria-describedby="end-chat-description" className="w-full max-w-[430px] rounded-[26px] border border-white/70 bg-white p-6 shadow-[0_28px_90px_rgba(25,34,31,0.28)] sm:p-8">
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff0eb] text-[#ef6445]"><AlertTriangle size={22} /></div>
@@ -926,19 +1024,16 @@ export default function ChatApp() {
   const [soundOn, setSoundOn] = useState(true);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [notice, setNotice] = useState("");
-  const openedRoomId = useRef<string | null>(null);
-  const searchCrypto = useRef<ConversationEncryption | null>(null);
+  const [homeNotice, setHomeNotice] = useState<TranslationKey | null>(null);
+  const [storagePersistent, setStoragePersistent] = useState(true);
+  const searchGeneration = useRef(0);
   const searchInFlight = useRef(false);
-  const roomRef = useRef<RoomSnapshot | null>(null);
+  const openedRoomId = useRef<string | null>(null);
   const matchedSoundRoom = useRef<string | null>(null);
   const endedSoundRoom = useRef<string | null>(null);
   const typingTimer = useRef<number | undefined>(undefined);
   const lastTypingSignal = useRef(0);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
-
-  useEffect(() => {
-    roomRef.current = room;
-  }, [room]);
 
   useEffect(() => {
     setSoundOn(isSoundEnabled());
@@ -987,6 +1082,7 @@ export default function ChatApp() {
   useEffect(() => {
     setConversations(loadLocalConversations());
     setAbuseSession(getOrCreateAbuseSession());
+    setStoragePersistent(isLocalHistoryPersistent());
     setStorageReady(true);
 
     // `/r/<roomId>` is served by the static invite shell via a rewrite, so the
@@ -998,7 +1094,12 @@ export default function ChatApp() {
       setScreen("loading");
     }
 
-    const savedLanguage = window.localStorage.getItem("luma-language");
+    let savedLanguage: string | null = null;
+    try {
+      savedLanguage = window.localStorage.getItem("luma-language");
+    } catch {
+      // Language still follows the browser preference in ephemeral tabs.
+    }
     if (isLanguageCode(savedLanguage)) {
       setLanguage(savedLanguage);
       return;
@@ -1015,7 +1116,11 @@ export default function ChatApp() {
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = getLanguageDirection(language);
-    window.localStorage.setItem("luma-language", language);
+    try {
+      window.localStorage.setItem("luma-language", language);
+    } catch {
+      // The selected language remains available for this tab.
+    }
   }, [language]);
 
   const changeLanguage = useCallback((nextLanguage: LanguageCode) => {
@@ -1056,7 +1161,7 @@ export default function ChatApp() {
     };
     void calculateSafetyCode();
     return () => { cancelled = true; };
-  }, [room?.id, room?.partnerPublicKey, room?.partnerSigningKey]);
+  }, [room]);
 
   useEffect(() => {
     // One lightweight same-origin probe, then a slow heartbeat that only runs
@@ -1144,44 +1249,91 @@ export default function ChatApp() {
   }, [clientId, room]);
 
   const startRandom = useCallback(async () => {
-    if (!abuseSession) return;
-    const participantId = createParticipantId();
-    setClientId(participantId);
-    setBusy(true);
-    setError("");
-    setScreen("matching");
+    if (!abuseSession || searchInFlight.current) return;
     searchInFlight.current = true;
+    const generation = ++searchGeneration.current;
+    setBusy(true);
+    setHomeNotice(null);
+    setScreen("matching");
     try {
+      const pending = loadLocalConversations().find(
+        (item) => item.kind === "random" && item.status === "waiting",
+      );
+      if (pending?.encryption?.mode === "ecdh") {
+        setClientId(pending.clientId);
+        try {
+          const data = await requestJson<{ room: RoomSnapshot }>(
+            `/api/rooms/${pending.roomId}`,
+            {
+              headers: { Authorization: `Bearer ${pending.clientId}` },
+              signal: AbortSignal.timeout(8000),
+            },
+          );
+          if (generation !== searchGeneration.current) return;
+          if (data.room.participantActive && data.room.status !== "ended") {
+            acceptRoom(data.room, pending.clientId, pending.encryption);
+            return;
+          }
+        } catch (error) {
+          // A removed or expired seat can be replaced. A network failure cannot:
+          // otherwise this client might accidentally create two active queues.
+          if (!(error instanceof ChatRequestError) || ![403, 404, 410].includes(error.status)) {
+            throw error;
+          }
+        }
+        if (generation !== searchGeneration.current) return;
+        setConversations(setLocalRoomStatus(pending.roomId, "ended"));
+      } else if (pending) {
+        // A lost local key cannot be resumed. The server closes its old waiting
+        // seat when the same browser session starts a new one below.
+        setConversations(setLocalRoomStatus(pending.roomId, "ended"));
+      }
+
+      const participantId = createParticipantId();
+      setClientId(participantId);
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
-      searchCrypto.current = encryption;
+      if (generation !== searchGeneration.current) return;
       const data = await requestMatch(participantId, abuseSession, {
         publicKey: serializePublicKey(encryption),
         signingKey: serializeSigningKey(encryption),
       });
+      if (generation !== searchGeneration.current) {
+        // Cancel may have happened while the request was in flight. Never show
+        // a room the person cancelled; release the seat on the server instead.
+        void endRemoteRoom(data.room.id, participantId).catch(() => {});
+        return;
+      }
       acceptRoom(data.room, participantId, encryption);
-    } catch {
-      setError(t("couldNotStart"));
-      setNotice(t("couldNotStart"));
-      playSound("error");
-      setScreen("home");
+    } catch (error) {
+      if (generation === searchGeneration.current) {
+        setHomeNotice(matchErrorKey(error));
+        playSound("error");
+        setRoom(null);
+        setClientId("");
+        setScreen("home");
+      }
     } finally {
       searchInFlight.current = false;
       setBusy(false);
     }
-  }, [abuseSession, acceptRoom, t]);
+  }, [abuseSession, acceptRoom]);
 
   const createPrivate = useCallback(async () => {
-    const participantId = createParticipantId();
-    const secret = createPrivateSecret();
-    const encryption = await ensureSigningCredentials({ mode: "private", secret });
-    setClientId(participantId);
     setBusy(true);
     setError("");
+    setHomeNotice(null);
     try {
+      const participantId = createParticipantId();
+      const secret = createPrivateSecret();
+      const encryption = await ensureSigningCredentials({ mode: "private", secret });
+      setClientId(participantId);
       const keyCommitment = await privateSecretCommitment(secret);
       const data = await requestJson<{ room: RoomSnapshot }>("/api/rooms", {
         method: "POST",
-        headers: { Authorization: `Bearer ${participantId}` },
+        headers: {
+          Authorization: `Bearer ${participantId}`,
+          "X-Luma-Abuse-Session": abuseSession,
+        },
         body: JSON.stringify({
           signingKey: serializeSigningKey(encryption),
           keyCommitment,
@@ -1195,7 +1347,7 @@ export default function ChatApp() {
     } finally {
       setBusy(false);
     }
-  }, [acceptRoom, router, t]);
+  }, [abuseSession, acceptRoom, router, t]);
 
   useEffect(() => {
     if (!storageReady || !initialRoomId || openedRoomId.current === initialRoomId) return;
@@ -1252,11 +1404,11 @@ export default function ChatApp() {
         }
         return;
       }
-      const secureEncryption = await ensureSigningCredentials(encryption);
-      if (existing) {
-        setConversations(saveLocalEncryption(initialRoomId, secureEncryption));
-      }
       try {
+        const secureEncryption = await ensureSigningCredentials(encryption);
+        if (existing) {
+          setConversations(saveLocalEncryption(initialRoomId, secureEncryption));
+        }
         const data = existing
           ? await requestJson<{ room: RoomSnapshot }>(
               `/api/rooms/${initialRoomId}/keys`,
@@ -1295,74 +1447,116 @@ export default function ChatApp() {
   }, [acceptRoom, initialRoomId, storageReady]);
 
   useEffect(() => {
-    if (screen !== "matching" || !clientId || !abuseSession) return;
-    let stopped = false;
-    const tick = async () => {
-      if (stopped || searchInFlight.current) return;
+    if (screen !== "matching" || !clientId || busy) return;
+    const generation = searchGeneration.current;
+    let cancelled = false;
+    let polling = false;
+    let failedPolls = 0;
+    const stopSearch = (reason: TranslationKey) => {
+      if (cancelled || generation !== searchGeneration.current) return;
+      const pending = loadLocalConversations().find(
+        (item) => item.clientId === clientId && item.status === "waiting",
+      );
+      if (pending) setConversations(setLocalRoomStatus(pending.roomId, "ended"));
+      setRoom(null);
+      setClientId("");
+      setHomeNotice(reason);
+      setScreen("home");
+    };
+    const pollQueue = async () => {
+      if (cancelled || polling || document.visibilityState !== "visible") return;
+      polling = true;
       try {
         const data = await requestJson<{ room: RoomSnapshot | null }>(
           "/api/match",
-          { headers: { Authorization: `Bearer ${clientId}` } },
+          {
+            headers: { Authorization: `Bearer ${clientId}` },
+            signal: AbortSignal.timeout(8000),
+          },
         );
-        if (stopped) return;
-        if (data.room && data.room.status !== "waiting") {
-          acceptRoom(data.room, clientId);
+        if (cancelled || generation !== searchGeneration.current) return;
+        failedPolls = 0;
+        if (!data.room || data.room.status === "ended") {
+          stopSearch("queueExpired");
           return;
         }
-        if (!data.room && roomRef.current?.status === "waiting") {
-          const encryption = searchCrypto.current;
-          if (!encryption) return;
-          searchInFlight.current = true;
-          try {
-            const matched = await requestMatch(clientId, abuseSession, {
-              publicKey: serializePublicKey(encryption),
-              signingKey: serializeSigningKey(encryption),
-            });
-            if (!stopped) acceptRoom(matched.room, clientId, encryption);
-          } catch {
-            if (!stopped) {
-              setNotice(t("couldNotStart"));
-              playSound("error");
-              setScreen("home");
-            }
-          } finally {
-            searchInFlight.current = false;
-          }
+        // Another tab may already have updated this shared local record from
+        // waiting to active. Match by room ID, never by a transient status:
+        // otherwise this tab mistakes a good match for a lost key and sends
+        // DELETE, disconnecting *both* people.
+        const localRoom = loadLocalConversations().find(
+          (item) => item.roomId === data.room?.id && item.clientId === clientId,
+        );
+        if (!localRoom?.encryption) {
+          // Never enter a chat whose local end-to-end key has truly been lost.
+          void endRemoteRoom(data.room.id, clientId).catch(() => {});
+          stopSearch("queueExpired");
+          return;
         }
-      } catch {
-        // A temporary polling issue should not end the queue.
+        if (data.room.status === "active") {
+          acceptRoom(data.room, clientId, localRoom.encryption);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof ChatRequestError && [403, 404, 410].includes(error.status)) {
+          stopSearch("queueExpired");
+        } else if (++failedPolls >= 3) {
+          stopSearch("matchNetworkError");
+        }
+      } finally {
+        polling = false;
       }
     };
-    void tick();
-    const poll = window.setInterval(() => void tick(), 1000);
+    const poll = window.setInterval(() => void pollQueue(), 1500);
+    document.addEventListener("visibilitychange", pollQueue);
     return () => {
-      stopped = true;
+      cancelled = true;
       window.clearInterval(poll);
+      document.removeEventListener("visibilitychange", pollQueue);
     };
-  }, [abuseSession, acceptRoom, clientId, screen, t]);
+  }, [acceptRoom, busy, clientId, screen]);
 
   useEffect(() => {
-    if (screen !== "chat" || !room || !clientId) return;
+    if (screen !== "chat" || !room || !clientId || room.status === "ended") return;
     const roomId = room.id;
-    // Presence comes from the relay's SSE `peer` events; this slow safety-net
-    // poll only reconciles room status and skips work while the tab is hidden.
+    let disposed = false;
+    // The relay handles presence; this poll reconciles room status and keys.
     const refresh = async () => {
       if (document.visibilityState !== "visible") return;
       try {
         const data = await requestJson<{ room: RoomSnapshot }>(
           `/api/rooms/${roomId}`,
-          { headers: { Authorization: `Bearer ${clientId}` } },
+          {
+            headers: { Authorization: `Bearer ${clientId}` },
+            signal: AbortSignal.timeout(8000),
+          },
         );
-        setRoom(data.room);
+        if (disposed) return;
+        setRoom((current) => current?.id === roomId && !sameRoomConnection(current, data.room)
+          ? data.room
+          : current);
         setConversations(saveLocalRoom(data.room, clientId));
-      } catch {
-        // Keep local history visible during brief connectivity drops.
+      } catch (error) {
+        if (disposed) return;
+        if (error instanceof ChatRequestError && [403, 404, 410].includes(error.status)) {
+          // The server may have removed an ended or expired room. Do not show
+          // a stale local card as an eternally 'Connecting…' live chat.
+          setConversations(setLocalRoomStatus(roomId, "ended"));
+          setRoom((current) => current?.id === roomId
+            ? { ...current, status: "ended", participantActive: false }
+            : current);
+        }
       }
     };
     void refresh();
-    const poll = window.setInterval(refresh, 20_000);
-    return () => window.clearInterval(poll);
-  }, [clientId, room?.id, screen]);
+    const poll = window.setInterval(() => void refresh(), 20_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      disposed = true;
+      window.clearInterval(poll);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [clientId, room, screen]);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId || room.status === "ended") return;
@@ -1547,7 +1741,7 @@ export default function ChatApp() {
       setRelayReady(false);
       abort.abort();
     };
-  }, [clientId, markPartnerTyping, room?.id, room?.partnerPublicKey, room?.status, screen, storeMessage]);
+  }, [clientId, markPartnerTyping, room, screen, storeMessage]);
 
   const pauseRoom = useCallback(() => {
     openedRoomId.current = null;
@@ -1559,70 +1753,90 @@ export default function ChatApp() {
     router.push("/");
   }, [router]);
 
-  const leaveRoom = useCallback((goHome = true) => {
+  const leaveRoom = useCallback(async (goHome = true): Promise<boolean> => {
     const currentRoom = room;
     const accessToken = clientId;
-
-    if (currentRoom && accessToken) {
-      // Stop locally first: close the rendered transcript/stream and erase the room key.
-      setConversations(setLocalRoomStatus(currentRoom.id, "ended"));
-      const endOnServer = async (attempt = 0): Promise<void> => {
-        try {
-          await requestJson(`/api/rooms/${currentRoom.id}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${accessToken}` },
-            body: JSON.stringify({}),
-          });
-        } catch {
-          if (attempt < 3) {
-            await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
-            await endOnServer(attempt + 1);
-          }
-        }
-      };
-      void endOnServer();
+    if (
+      currentRoom && accessToken && currentRoom.status !== "ended" &&
+      currentRoom.participantActive
+    ) {
+      try {
+        // Keep the local room key until the server confirms the end. Otherwise
+        // a failed DELETE leaves an unclosable live room behind.
+        await endRemoteRoom(currentRoom.id, accessToken);
+      } catch {
+        setNotice(t("endFailed"));
+        return false;
+      }
     }
-
+    if (currentRoom) setConversations(setLocalRoomStatus(currentRoom.id, "ended"));
     setRoom(null);
     setMessages([]);
     setDraft("");
     setRelayReady(false);
     setSafetyCode("");
+    setNotice("");
     if (goHome) {
       setClientId("");
       setScreen("home");
       router.push("/");
     }
-  }, [clientId, room, router]);
+    return true;
+  }, [clientId, room, router, t]);
 
   const nextChat = useCallback(async () => {
-    if (!abuseSession) return;
-    leaveRoom(false);
+    if (!abuseSession || searchInFlight.current) return;
+    searchInFlight.current = true;
+    setBusy(true);
+    const ended = await leaveRoom(false);
+    if (!ended) {
+      searchInFlight.current = false;
+      setBusy(false);
+      return;
+    }
+    const generation = ++searchGeneration.current;
     const participantId = createParticipantId();
     setClientId(participantId);
     setScreen("matching");
-    setBusy(true);
-    searchInFlight.current = true;
     try {
       const encryption = await ensureSigningCredentials(await createEcdhCredentials());
-      searchCrypto.current = encryption;
+      if (generation !== searchGeneration.current) return;
       const data = await requestMatch(participantId, abuseSession, {
         publicKey: serializePublicKey(encryption),
         signingKey: serializeSigningKey(encryption),
       });
+      if (generation !== searchGeneration.current) {
+        void endRemoteRoom(data.room.id, participantId).catch(() => {});
+        return;
+      }
       acceptRoom(data.room, participantId, encryption);
-    } catch {
-      setError(t("nextError"));
-      setScreen("error");
+    } catch (error) {
+      if (generation === searchGeneration.current) {
+        setHomeNotice(matchErrorKey(error));
+        setClientId("");
+        setScreen("home");
+        router.push("/");
+      }
     } finally {
       searchInFlight.current = false;
       setBusy(false);
     }
-  }, [abuseSession, acceptRoom, leaveRoom, t]);
+  }, [abuseSession, acceptRoom, leaveRoom, router]);
 
-  const cancelSearch = useCallback(async () => {
-    await leaveRoom(true);
+  const cancelSearch = useCallback(async (): Promise<boolean> => {
+    const previousGeneration = searchGeneration.current;
+    searchGeneration.current += 1;
+    const ended = await leaveRoom(true);
+    if (!ended) {
+      searchGeneration.current = previousGeneration;
+      setHomeNotice("endFailed");
+    }
+    return ended;
   }, [leaveRoom]);
+
+  const privateFromQueue = useCallback(async () => {
+    if (await cancelSearch()) await createPrivate();
+  }, [cancelSearch, createPrivate]);
 
   const sendMessage = useCallback(async (event?: FormEvent) => {
     event?.preventDefault();
@@ -1740,26 +1954,46 @@ export default function ChatApp() {
     }
   }, [room?.id, router]);
 
-  const openLocalChat = useCallback((conversation: LocalConversation) => {
+  const openLocalChat = useCallback(async (conversation: LocalConversation) => {
     if (room?.id === conversation.roomId) return;
+    if (screen === "matching") {
+      const previousGeneration = searchGeneration.current;
+      searchGeneration.current += 1;
+      if (!await leaveRoom(false)) {
+        searchGeneration.current = previousGeneration;
+        setHomeNotice("endFailed");
+        return;
+      }
+    }
     openedRoomId.current = null;
+    if (conversation.kind === "random" && conversation.status === "waiting") {
+      if (searchInFlight.current) {
+        setHomeNotice("queueExpired");
+        setScreen("home");
+        return;
+      }
+      void startRandom();
+      return;
+    }
     if (conversation.kind === "random") {
-      // Random rooms are resumed from local encrypted state; the relay's status
-      // poll then refreshes partner keys or marks the room as ended.
+      const canResume = conversation.status !== "ended" &&
+        conversation.encryption?.mode === "ecdh";
       setClientId(conversation.clientId);
-      setConversations(loadLocalConversations());
+      setConversations(canResume
+        ? loadLocalConversations()
+        : setLocalRoomStatus(conversation.roomId, "ended"));
       setMessages(conversation.messages);
       setRoom({
         id: conversation.roomId,
         kind: "random",
-        status: conversation.status,
+        status: canResume ? conversation.status : "ended",
         participantPublicId: conversation.publicId ?? "",
         partnerPublicId: null,
         partnerPresent: false,
         partnerOnline: false,
         partnerPublicKey: null,
         partnerSigningKey: null,
-        participantActive: conversation.status !== "ended",
+        participantActive: canResume,
         createdAt: conversation.createdAt,
       });
       setScreen("chat");
@@ -1770,7 +2004,7 @@ export default function ChatApp() {
       ? conversation.encryption.secret
       : null;
     router.push(`/r/${conversation.roomId}${secret ? `#k=${secret}` : ""}`);
-  }, [room?.id, router]);
+  }, [leaveRoom, room?.id, router, screen, startRandom]);
 
   if (screen === "loading" || (initialRoomId && !storageReady)) {
     return <div className="grid min-h-screen place-items-center bg-[#f8f6f0]" dir={getLanguageDirection(language)}><div className="text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#ff6747] text-white"><LoaderCircle className="animate-spin" size={22} /></div><p className="mt-4 text-[12px] font-bold text-[#77807d]">{t("openingInvite")}</p></div></div>;
@@ -1780,11 +2014,11 @@ export default function ChatApp() {
     return <div className="min-h-screen bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} soundEnabled={soundOn} onToggleSound={toggleSound} /><main className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
   }
 
-  if (screen === "matching") return <MatchingScreen onCancel={cancelSearch} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
+  if (screen === "matching") return <MatchingScreen onCancel={() => void cancelSearch()} onPrivate={() => void privateFromQueue()} starting={busy} matchNotice={homeNotice} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
+    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
   }
 
-  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
+  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} homeNotice={homeNotice} onDismissNotice={() => setHomeNotice(null)} storagePersistent={storagePersistent} />;
 }
