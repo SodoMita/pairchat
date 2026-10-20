@@ -548,24 +548,16 @@ function HomeScreen({
           <div className="mx-auto mt-9 max-w-[720px] space-y-6">
             {allGuideTopics.map((topic, index) => {
               const ItemIcon = topic.icon;
-              // One wall of text is hard to read, and every locale writes long
-              // sentences. Break the copy at sentence ends into short blocks
-              // with a comfortable measure.
-              const sentences = topic.copy.match(/[^.!?।॥。！？؟]+[.!?।॥。！？؟]*\s*/gu) ?? [topic.copy];
-              const paragraphs: string[] = [];
-              let current = "";
-              for (const raw of sentences) {
-                const sentence = raw.trim();
-                if (!sentence) continue;
-                const joined = current ? `${current} ${sentence}` : sentence;
-                if (current && joined.length > 165) {
-                  paragraphs.push(current);
-                  current = sentence;
-                } else {
-                  current = joined;
-                }
-              }
-              if (current) paragraphs.push(current);
+              const partLabels = [t("guideWhyLabel"), t("guideConsequenceLabel"), t("guideReasoningLabel")];
+              // Split the copy at sentence ends, then hand each third to its own
+              // labelled part: why it happens, what it leads to, what to know.
+              const sentences = (topic.copy.match(/[^.!?।॥。！？؟]+[.!?।॥。！？؟]*\s*/gu) ?? [topic.copy])
+                .map((sentence) => sentence.trim())
+                .filter(Boolean);
+              const perPart = Math.max(1, Math.ceil(sentences.length / 3));
+              const parts = [0, 1, 2]
+                .map((slot) => sentences.slice(slot * perPart, (slot + 1) * perPart).join(" ").trim())
+                .filter(Boolean);
               return (
                 <article key={topic.title} className="rounded-2xl border border-[#e7e6df] bg-white/90 p-6 sm:p-8">
                   <h3 className="flex items-start gap-3 text-[17px] font-extrabold leading-[1.4] text-[#23302c]">
@@ -575,9 +567,12 @@ function HomeScreen({
                       {topic.title}
                     </span>
                   </h3>
-                  <div className="mt-4 space-y-3 border-t border-[#eceade] pt-4 text-[15px] leading-[1.85] text-[#4f5c57]">
-                    {paragraphs.map((paragraph, paragraphIndex) => (
-                      <p key={paragraphIndex} className={paragraphIndex === 0 ? "text-[#2e3a35]" : undefined}>{paragraph}</p>
+                  <div className="mt-4 space-y-3.5 border-t border-[#eceade] pt-4 text-[15px] leading-[1.85] text-[#4f5c57]">
+                    {parts.map((part, partIndex) => (
+                      <p key={partIndex}>
+                        <strong className="font-extrabold text-[#27322f]">{partLabels[partIndex]}: </strong>
+                        {part}
+                      </p>
                     ))}
                   </div>
                 </article>
