@@ -45,7 +45,7 @@ export type LocalChatMessage = {
   body: string;
   senderPublicId: string;
   createdAt: string;
-  delivery?: "sent" | "delivered";
+  delivery?: "sent" | "delivered" | "read";
 };
 
 type SigningMaterial = {
@@ -80,7 +80,8 @@ function isMessage(value: unknown): value is LocalChatMessage {
     typeof message.createdAt === "string" &&
     (message.delivery === undefined ||
       message.delivery === "sent" ||
-      message.delivery === "delivered")
+      message.delivery === "delivered" ||
+      message.delivery === "read")
   );
 }
 
@@ -243,8 +244,29 @@ export function markLocalMessageDelivered(
         : {
             ...conversation,
             messages: conversation.messages.map((message) =>
-              message.id === messageId
+              message.id === messageId && message.delivery !== "read"
                 ? { ...message, delivery: "delivered" as const }
+                : message,
+            ),
+          },
+    ),
+  );
+}
+
+export function markLocalMessageRead(
+  roomId: string,
+  messageId: string,
+): LocalConversation[] {
+  const current = loadLocalConversations();
+  return writeLocalConversations(
+    current.map((conversation) =>
+      conversation.roomId !== roomId
+        ? conversation
+        : {
+            ...conversation,
+            messages: conversation.messages.map((message) =>
+              message.id === messageId
+                ? { ...message, delivery: "read" as const }
                 : message,
             ),
           },

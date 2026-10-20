@@ -15,6 +15,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "浏览器阻止了本地存储。你现在仍可聊天，但关闭或刷新标签页后，记录和密钥将丢失。",
     peerNotConnected: "对方尚未连接，可能已经离开。你可以结束此聊天并寻找下一位。",
     endFailed: "无法在服务器上结束此聊天；聊天仍然开放，请重试。",
+    readStatus: "已读",
   },
   hi: {
     queueExplanation: "आप कतार में हैं। चैट तभी शुरू होगी जब कोई दूसरा व्यक्ति भी खोज रहा हो; यहाँ और कोई न हो तो समय लग सकता है।",
@@ -29,6 +30,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "यह ब्राउज़र स्थानीय संग्रहण रोक रहा है। अभी चैट होगी, लेकिन टैब बंद या रीफ़्रेश करने पर इतिहास और कुंजियाँ मिट जाएँगी।",
     peerNotConnected: "दूसरा व्यक्ति अभी जुड़ा नहीं है; शायद वह चला गया। आप इस चैट को समाप्त करके किसी और को खोज सकते हैं।",
     endFailed: "सर्वर पर चैट समाप्त नहीं हो सकी। यह अभी खुली है; कृपया फिर कोशिश करें।",
+    readStatus: "पढ़ लिया",
   },
   es: {
     queueExplanation: "Estás en la cola. La charla empieza solo cuando otra persona también busca; puede tardar si no hay nadie más.",
@@ -43,6 +45,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Este navegador bloquea el almacenamiento local. Puedes chatear ahora, pero al cerrar o recargar esta pestaña se perderán el historial y las claves.",
     peerNotConnected: "La otra persona aún no se conectó; puede que se haya ido. Puedes terminar este chat y buscar a alguien más.",
     endFailed: "No se pudo terminar el chat en el servidor. Sigue abierto; inténtalo de nuevo.",
+    readStatus: "Leído",
   },
   fr: {
     queueExplanation: "Vous êtes dans la file. Le chat commence seulement lorsqu’une autre personne cherche aussi ; l’attente peut être longue si personne n’est là.",
@@ -57,6 +60,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Ce navigateur bloque le stockage local. Vous pouvez discuter maintenant, mais l’historique et les clés disparaîtront si vous fermez ou rechargez cet onglet.",
     peerNotConnected: "L’autre personne ne s’est pas encore connectée. Elle est peut-être partie ; vous pouvez terminer cette discussion et chercher quelqu’un d’autre.",
     endFailed: "Impossible de terminer la discussion sur le serveur. Elle est toujours ouverte ; réessayez.",
+    readStatus: "Lu",
   },
   ar: {
     queueExplanation: "أنت في قائمة الانتظار. تبدأ المحادثة فقط عندما يبحث شخص آخر أيضًا؛ قد يستغرق الأمر وقتًا إن لم يكن أحد هنا.",
@@ -71,6 +75,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "يمنع هذا المتصفح التخزين المحلي. يمكنك الدردشة الآن، لكن السجل والمفاتيح سيضيعان عند إغلاق هذه العلامة أو تحديثها.",
     peerNotConnected: "لم يتصل الشخص الآخر بعد، وربما غادر. يمكنك إنهاء هذه المحادثة والبحث عن شخص آخر.",
     endFailed: "تعذّر إنهاء المحادثة على الخادم. ما زالت مفتوحة؛ حاول مجددًا.",
+    readStatus: "مقروء",
   },
   bn: {
     queueExplanation: "আপনি অপেক্ষার সারিতে আছেন। অন্য কেউ খুঁজলেই চ্যাট শুরু হবে; এখন কেউ না থাকলে কিছু সময় লাগতে পারে।",
@@ -85,6 +90,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "এই ব্রাউজার স্থানীয় সংরক্ষণ বন্ধ রেখেছে। এখন চ্যাট করা যাবে, কিন্তু ট্যাব বন্ধ বা রিফ্রেশ করলে ইতিহাস ও চাবি হারিয়ে যাবে।",
     peerNotConnected: "অন্য ব্যক্তি এখনও যুক্ত হননি; হয়তো চলে গেছেন। এই চ্যাট শেষ করে অন্য কাউকে খুঁজতে পারেন।",
     endFailed: "সার্ভারে চ্যাট শেষ করা যায়নি। এটি এখনও খোলা; আবার চেষ্টা করুন।",
+    readStatus: "পঠিত",
   },
   pt: {
     queueExplanation: "Você está na fila. A conversa só começa quando outra pessoa também está procurando; pode demorar se não houver ninguém aqui.",
@@ -99,6 +105,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Este navegador bloqueia o armazenamento local. Você pode conversar agora, mas o histórico e as chaves serão perdidos ao fechar ou recarregar esta aba.",
     peerNotConnected: "A outra pessoa ainda não se conectou; talvez tenha saído. Você pode encerrar esta conversa e buscar outra pessoa.",
     endFailed: "Não foi possível encerrar a conversa no servidor. Ela ainda está aberta; tente novamente.",
+    readStatus: "Lido",
   },
   ru: {
     queueExplanation: "Вы в очереди. Чат начнётся, только когда другой человек тоже будет искать собеседника; если никого нет, придётся подождать.",
@@ -113,6 +120,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Браузер блокирует локальное хранилище. Общаться можно, но история и ключи исчезнут после закрытия или перезагрузки вкладки.",
     peerNotConnected: "Собеседник ещё не подключился; возможно, он ушёл. Вы можете завершить этот чат и найти другого.",
     endFailed: "Не удалось завершить чат на сервере. Он всё ещё открыт; попробуйте ещё раз.",
+    readStatus: "Прочитано",
   },
   ur: {
     queueExplanation: "آپ انتظار کی قطار میں ہیں۔ چیٹ تبھی شروع ہوگی جب کوئی اور بھی تلاش کر رہا ہو؛ اگر یہاں کوئی نہیں تو وقت لگ سکتا ہے۔",
@@ -127,6 +135,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "یہ براؤزر مقامی اسٹوریج روک رہا ہے۔ ابھی چیٹ ہو سکتی ہے، مگر ٹیب بند یا ری لوڈ کرنے پر تاریخ اور چابیاں ضائع ہوجائیں گی۔",
     peerNotConnected: "دوسرا شخص ابھی منسلک نہیں ہوا؛ شاید چلا گیا ہو۔ آپ یہ چیٹ ختم کرکے کسی اور کو تلاش کرسکتے ہیں۔",
     endFailed: "سرور پر چیٹ ختم نہیں ہو سکی۔ یہ ابھی کھلی ہے؛ دوبارہ کوشش کریں۔",
+    readStatus: "پڑھ لیا",
   },
   id: {
     queueExplanation: "Kamu sedang mengantre. Obrolan dimulai hanya saat ada orang lain yang juga mencari; bisa lama jika belum ada orang di sini.",
@@ -141,6 +150,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Browser ini memblokir penyimpanan lokal. Kamu bisa mengobrol sekarang, tetapi riwayat dan kunci akan hilang saat tab ditutup atau dimuat ulang.",
     peerNotConnected: "Orang lain belum terhubung; mungkin sudah pergi. Kamu bisa mengakhiri obrolan ini dan mencari orang lain.",
     endFailed: "Tidak dapat mengakhiri obrolan di server. Obrolan masih terbuka; coba lagi.",
+    readStatus: "Dibaca",
   },
   de: {
     queueExplanation: "Du bist in der Warteschlange. Der Chat beginnt erst, wenn noch jemand sucht; wenn niemand da ist, kann es dauern.",
@@ -155,6 +165,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Dieser Browser blockiert die lokale Speicherung. Chatten geht jetzt, aber Verlauf und Schlüssel gehen beim Schließen oder Neuladen des Tabs verloren.",
     peerNotConnected: "Die andere Person ist noch nicht verbunden; vielleicht ist sie weg. Du kannst diesen Chat beenden und jemand anderen finden.",
     endFailed: "Der Chat konnte auf dem Server nicht beendet werden. Er ist noch offen; bitte versuch es erneut.",
+    readStatus: "Gelesen",
   },
   ja: {
     queueExplanation: "待機中です。ほかの人も相手を探しているときにだけチャットが始まります。今誰もいなければ時間がかかる場合があります。",
@@ -169,6 +180,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "このブラウザではローカル保存がブロックされています。今はチャットできますが、タブを閉じたり再読み込みしたりすると履歴と鍵が失われます。",
     peerNotConnected: "相手がまだ接続していません。すでに離れた可能性があります。このチャットを終了して別の人を探せます。",
     endFailed: "サーバー上でチャットを終了できませんでした。まだ開いています。再試行してください。",
+    readStatus: "既読",
   },
   sw: {
     queueExplanation: "Uko kwenye foleni. Gumzo huanza tu mtu mwingine akitafuta pia; linaweza kuchelewa kama hakuna mwingine hapa.",
@@ -183,6 +195,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Kivinjari hiki kimezuia hifadhi ya ndani. Unaweza kupiga gumzo sasa, lakini historia na funguo zitapotea ukifunga au kupakia upya kichupo.",
     peerNotConnected: "Mtu mwingine hajaunganishwa bado; huenda ameondoka. Unaweza kumaliza gumzo hili na kutafuta mtu mwingine.",
     endFailed: "Imeshindwa kumaliza gumzo kwenye seva. Bado liko wazi; tafadhali jaribu tena.",
+    readStatus: "Imesomwa",
   },
   mr: {
     queueExplanation: "तुम्ही प्रतीक्षेत आहात. दुसरी व्यक्तीही शोधत असेल तरच चॅट सुरू होईल; इथे कोणी नसेल तर वेळ लागू शकतो.",
@@ -197,6 +210,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "हा ब्राउझर स्थानिक संग्रहण रोखतो. आत्ता चॅट करता येईल, पण टॅब बंद किंवा रीफ्रेश केल्यावर इतिहास आणि कळा गमावाल.",
     peerNotConnected: "दुसरी व्यक्ती अजून जोडली नाही; कदाचित गेली असेल. हे चॅट संपवून दुसऱ्याला शोधू शकता.",
     endFailed: "सर्व्हरवर चॅट संपवता आले नाही. ते अजून उघडे आहे; कृपया पुन्हा प्रयत्न करा.",
+    readStatus: "वाचले",
   },
   te: {
     queueExplanation: "మీరు క్యూలో ఉన్నారు. మరొకరు కూడా వెతుకుతున్నప్పుడే చాట్ ప్రారంభమవుతుంది; ఇక్కడ మరెవరూ లేకపోతే సమయం పట్టవచ్చు.",
@@ -211,6 +225,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "ఈ బ్రౌజర్ స్థానిక నిల్వను ఆపుతోంది. ఇప్పుడు చాట్ చేయవచ్చు, కానీ ట్యాబ్ మూసినా రీలోడ్ చేసినా చరిత్ర, కీలను కోల్పోతారు.",
     peerNotConnected: "ఇతర వ్యక్తి ఇంకా కనెక్ట్ కాలేదు; వారు వెళ్లి ఉండవచ్చు. ఈ చాట్ ముగించి మరొకరిని వెతకవచ్చు.",
     endFailed: "సర్వర్‌లో చాట్‌ను ముగించలేకపోయాం. అది ఇంకా తెరిచి ఉంది; మళ్లీ ప్రయత్నించండి.",
+    readStatus: "చదివారు",
   },
   tr: {
     queueExplanation: "Sıradasın. Sohbet yalnızca başka biri de arıyorsa başlar; burada başka kimse yoksa biraz sürebilir.",
@@ -225,6 +240,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Bu tarayıcı yerel depolamayı engelliyor. Şimdi sohbet edebilirsin ama sekmeyi kapatınca veya yenileyince geçmiş ve anahtarlar kaybolur.",
     peerNotConnected: "Diğer kişi henüz bağlanmadı; ayrılmış olabilir. Bu sohbeti bitirip başka birini bulabilirsin.",
     endFailed: "Sohbet sunucuda bitirilemedi. Hâlâ açık; lütfen tekrar dene.",
+    readStatus: "Okundu",
   },
   ta: {
     queueExplanation: "நீங்கள் வரிசையில் உள்ளீர்கள். வேறொருவரும் தேடும்போதுதான் அரட்டை தொடங்கும்; இப்போது யாரும் இல்லாவிட்டால் சிறிது நேரம் ஆகலாம்.",
@@ -239,6 +255,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "இந்த உலாவி உள்ளூர் சேமிப்பைத் தடுக்கிறது. இப்போது அரட்டை செய்யலாம், ஆனால் தாவலை மூடினால் அல்லது புதுப்பித்தால் வரலாறும் விசைகளும் இழக்கப்படும்.",
     peerNotConnected: "மற்றவர் இன்னும் இணையவில்லை; சென்றிருக்கலாம். இந்த அரட்டையை முடித்து வேறொருவரைத் தேடலாம்.",
     endFailed: "சேவையகத்தில் அரட்டையை முடிக்க முடியவில்லை. அது இன்னும் திறந்துள்ளது; மீண்டும் முயற்சிக்கவும்.",
+    readStatus: "படித்தார்",
   },
   vi: {
     queueExplanation: "Bạn đang trong hàng chờ. Chỉ khi người khác cũng đang tìm thì trò chuyện mới bắt đầu; có thể mất thời gian nếu chưa có ai ở đây.",
@@ -253,6 +270,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "Trình duyệt chặn lưu trữ cục bộ. Bạn vẫn có thể trò chuyện, nhưng lịch sử và khóa sẽ mất khi đóng hoặc tải lại tab.",
     peerNotConnected: "Người kia chưa kết nối; có thể họ đã rời đi. Bạn có thể kết thúc và tìm người khác.",
     endFailed: "Không thể kết thúc cuộc trò chuyện trên máy chủ. Cuộc trò chuyện vẫn mở; hãy thử lại.",
+    readStatus: "Đã đọc",
   },
   ko: {
     queueExplanation: "대기 중입니다. 다른 사람도 찾고 있을 때만 채팅이 시작됩니다. 지금 아무도 없으면 시간이 걸릴 수 있어요.",
@@ -267,5 +285,6 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     storageEphemeral: "브라우저가 로컬 저장을 차단합니다. 지금은 채팅할 수 있지만 탭을 닫거나 새로고침하면 기록과 키가 사라집니다.",
     peerNotConnected: "상대가 아직 연결하지 않았습니다. 떠났을 수 있어요. 이 채팅을 끝내고 다른 사람을 찾을 수 있습니다.",
     endFailed: "서버에서 채팅을 종료할 수 없었습니다. 아직 열려 있으니 다시 시도하세요.",
+    readStatus: "읽음",
   },
 };

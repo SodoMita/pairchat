@@ -19,6 +19,13 @@ export type LiveChatEvent =
       recipientPublicId: string;
       receivedAt: string;
       signature: string;
+    }
+  | {
+      type: "read";
+      messageId: string;
+      recipientPublicId: string;
+      readAt: string;
+      signature: string;
     };
 
 type PendingDelivery = { senderAccessHash: string; recipientAccessHash: string; expiresAt: number };
@@ -111,6 +118,27 @@ export function acknowledgeChatMessage(
 
 export function countParticipantStreams(roomId: string, clientId: string) {
   return registry.get(roomId)?.get(clientId)?.size ?? 0;
+}
+
+export function publishReadReceipt(
+  roomId: string,
+  senderAccessHash: string,
+  messageId: string,
+  recipientPublicId: string,
+  readAt: string,
+  signature: string,
+) {
+  const participants = registry.get(roomId);
+  if (!participants) return false;
+  let delivered = false;
+  for (const [clientId, listeners] of participants) {
+    if (clientId === senderAccessHash) continue;
+    for (const listener of listeners) {
+      listener({ type: "read", messageId, recipientPublicId, readAt, signature });
+      delivered = true;
+    }
+  }
+  return delivered;
 }
 
 /**

@@ -109,6 +109,17 @@ export function deliveryAckSigningBytes(
   );
 }
 
+export function readAckSigningBytes(
+  roomId: string,
+  messageId: string,
+  recipientPublicId: string,
+  readAt: string,
+) {
+  return encoder.encode(
+    ["luma-read-ack-v1", roomId, messageId, recipientPublicId, readAt].join("\n"),
+  );
+}
+
 export async function signDeliveryAck(
   encryption: ConversationEncryption | undefined,
   roomId: string,
@@ -130,6 +141,57 @@ export async function signDeliveryAck(
     deliveryAckSigningBytes(roomId, messageId, recipientPublicId, receivedAt),
   );
   return toBase64Url(new Uint8Array(signature));
+}
+
+export async function signReadAck(
+  encryption: ConversationEncryption | undefined,
+  roomId: string,
+  messageId: string,
+  recipientPublicId: string,
+  readAt: string,
+) {
+  if (!encryption?.signingPrivateKey) throw new Error("No local signing key");
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    encryption.signingPrivateKey,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    privateKey,
+    readAckSigningBytes(roomId, messageId, recipientPublicId, readAt),
+  );
+  return toBase64Url(new Uint8Array(signature));
+}
+
+export async function verifyReadAck(
+  serializedPublicKey: string | null,
+  roomId: string,
+  messageId: string,
+  recipientPublicId: string,
+  readAt: string,
+  signatureValue: string,
+) {
+  if (!serializedPublicKey) return false;
+  try {
+    const publicKey = await crypto.subtle.importKey(
+      "jwk",
+      JSON.parse(serializedPublicKey) as JsonWebKey,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
+    );
+    return crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      publicKey,
+      fromBase64Url(signatureValue),
+      readAckSigningBytes(roomId, messageId, recipientPublicId, readAt),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function verifyDeliveryAck(
