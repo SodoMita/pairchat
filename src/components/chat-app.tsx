@@ -15,7 +15,9 @@ import {
   privateSecretCommitment,
   serializePublicKey,
   signDeliveryAck,
+  signReadAck,
   verifyDeliveryAck,
+  verifyReadAck,
   serializeSigningKey,
   signEnvelope,
   verifyEnvelopeSignature,
@@ -36,6 +38,7 @@ import {
   loadLocalConversations,
   LOCAL_CHATS_KEY,
   markLocalMessageDelivered,
+  markLocalMessageRead,
   saveLocalEncryption,
   saveLocalMessage,
   saveLocalRoom,
@@ -653,6 +656,32 @@ function MatchingScreen({
   );
 }
 
+function MessageReceipt({
+  delivery,
+  t,
+}: {
+  delivery?: LocalChatMessage["delivery"];
+  t: Translator;
+}) {
+  if (!delivery) return null;
+  const label =
+    delivery === "read" ? t("readStatus") : delivery === "delivered" ? t("deliveredStatus") : t("sentStatus");
+  const color = delivery === "read" ? "text-[#ff6747]" : "text-[#a4aaa7]";
+  return (
+    <span className={`ms-1.5 inline-flex items-center gap-0.5 ${color}`} title={label} aria-label={label}>
+      {delivery === "sent" ? (
+        <Check size={11} strokeWidth={2.8} />
+      ) : (
+        <span className="inline-flex">
+          <Check size={11} strokeWidth={2.8} className="-me-1.5" />
+          <Check size={11} strokeWidth={2.8} />
+        </span>
+      )}
+      <span className="ms-0.5">{label}</span>
+    </span>
+  );
+}
+
 function ChatScreen({
   room,
   clientId,
@@ -678,6 +707,7 @@ function ChatScreen({
   onPause,
   onLeave,
   onNext,
+  onReadIncoming,
   partnerTyping,
   notice,
   onDismissNotice,
@@ -713,6 +743,7 @@ function ChatScreen({
   onPause: () => void;
   onLeave: () => void;
   onNext: () => void;
+  onReadIncoming: (messageId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -738,6 +769,41 @@ function ChatScreen({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, waiting, ended]);
+
+  useEffect(() => {
+    if (waiting || ended || !secureReady) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (document.visibilityState !== "visible") return;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const id = entry.target.getAttribute("data-incoming-id");
+          if (id) onReadIncoming(id);
+        }
+      },
+      { root, threshold: 0.55 },
+    );
+    const nodes = root.querySelectorAll("[data-incoming-id]");
+    nodes.forEach((node) => observer.observe(node));
+    const flushVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      nodes.forEach((node) => {
+        const id = node.getAttribute("data-incoming-id");
+        if (!id) return;
+        const rect = node.getBoundingClientRect();
+        const rootRect = root.getBoundingClientRect();
+        if (rect.bottom > rootRect.top && rect.top < rootRect.bottom) onReadIncoming(id);
+      });
+    };
+    document.addEventListener("visibilitychange", flushVisible);
+    flushVisible();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", flushVisible);
+    };
+  }, [ended, messages, onReadIncoming, secureReady, waiting]);
 
   useEffect(() => {
     if (!confirmAction) return;
@@ -860,13 +926,13 @@ function ChatScreen({
                       {messages.map((message) => {
                         const mine = message.senderPublicId === room.participantPublicId;
                         return (
-                          <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`}>
+                          <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`} {...(!mine ? { "data-incoming-id": message.id } : {})}>
                             {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
                             <div className={`max-w-[78%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
                               <div className={`whitespace-pre-wrap break-words px-4 py-3 text-start text-[13px] leading-6 ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
                               <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">
                                 {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
-                                {mine && message.delivery && <span className="ms-2">{message.delivery === "delivered" ? t("deliveredStatus") : t("sentStatus")}</span>}
+                                {mine && <MessageReceipt delivery={message.delivery} t={t} />}
                               </p>
                             </div>
                           </div>
@@ -895,13 +961,13 @@ function ChatScreen({
                     {messages.map((message) => {
                       const mine = message.senderPublicId === room.participantPublicId;
                       return (
-                        <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`}>
+                        <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`} {...(!mine ? { "data-incoming-id": message.id } : {})}>
                           {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
                           <div className={`max-w-[78%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
                             <div className={`whitespace-pre-wrap break-words px-4 py-3 text-start text-[13px] leading-6 ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white shadow-[0_7px_18px_rgba(255,103,71,0.13)]" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
                             <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">
                               {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
-                              {mine && message.delivery && <span className="ms-2">{message.delivery === "delivered" ? t("deliveredStatus") : t("sentStatus")}</span>}
+                              {mine && <MessageReceipt delivery={message.delivery} t={t} />}
                             </p>
                           </div>
                         </div>
@@ -1003,6 +1069,7 @@ export default function ChatApp() {
   const endedSoundRoom = useRef<string | null>(null);
   const typingTimer = useRef<number | undefined>(undefined);
   const lastTypingSignal = useRef(0);
+  const reportedReads = useRef(new Set<string>());
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
 
   useEffect(() => {
@@ -1175,6 +1242,7 @@ export default function ChatApp() {
     encryption?: ConversationEncryption,
   ) => {
     if (!nextRoom) return;
+    reportedReads.current = new Set();
     setClientId(participantId);
     const nextConversations = saveLocalRoom(nextRoom, participantId, encryption);
     const local = nextConversations.find((item) => item.roomId === nextRoom.id);
@@ -1189,6 +1257,35 @@ export default function ChatApp() {
     setConversations(next);
     setMessages(next.find((item) => item.roomId === roomId)?.messages ?? []);
   }, []);
+
+  const sendReadReceipt = useCallback(async (messageId: string) => {
+    const currentRoom = room;
+    if (!currentRoom || !clientId || reportedReads.current.has(messageId)) return;
+    reportedReads.current.add(messageId);
+    try {
+      const conversation = loadLocalConversations().find((item) => item.roomId === currentRoom.id);
+      const readAt = new Date().toISOString();
+      const signature = await signReadAck(
+        conversation?.encryption,
+        currentRoom.id,
+        messageId,
+        currentRoom.participantPublicId,
+        readAt,
+      );
+      await requestJson(`/api/rooms/${currentRoom.id}/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${clientId}` },
+        body: JSON.stringify({
+          messageId,
+          recipientPublicId: currentRoom.participantPublicId,
+          readAt,
+          signature,
+        }),
+      });
+    } catch {
+      reportedReads.current.delete(messageId);
+    }
+  }, [clientId, room]);
 
   const markPartnerTyping = useCallback(() => {
     setPartnerTyping(true);
@@ -1672,6 +1769,38 @@ export default function ChatApp() {
         );
         setConversations(setLocalRoomStatus(roomId, "ended"));
       }
+      if (eventType === "read") {
+        void (async () => {
+          try {
+            const receipt = JSON.parse(payload) as {
+              messageId?: string;
+              recipientPublicId?: string;
+              readAt?: string;
+              signature?: string;
+            };
+            if (
+              typeof receipt.messageId !== "string" ||
+              receipt.recipientPublicId !== roomSnapshot.partnerPublicId ||
+              typeof receipt.readAt !== "string" ||
+              typeof receipt.signature !== "string"
+            ) return;
+            const signatureValid = await verifyReadAck(
+              roomSnapshot.partnerSigningKey,
+              roomId,
+              receipt.messageId,
+              receipt.recipientPublicId,
+              receipt.readAt,
+              receipt.signature,
+            );
+            if (!signatureValid) return;
+            const next = markLocalMessageRead(roomId, receipt.messageId);
+            setConversations(next);
+            setMessages(next.find((item) => item.roomId === roomId)?.messages ?? []);
+          } catch {
+            // Read status is best-effort.
+          }
+        })();
+      }
       if (eventType === "ack") {
         void (async () => {
           try {
@@ -2022,7 +2151,7 @@ export default function ChatApp() {
   if (screen === "matching") return <MatchingScreen onCancel={() => void cancelSearch()} onPrivate={() => void privateFromQueue()} starting={busy} matchNotice={homeNotice} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
+    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} onReadIncoming={(messageId) => void sendReadReceipt(messageId)} />;
   }
 
   return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} homeNotice={homeNotice} onDismissNotice={() => setHomeNotice(null)} storagePersistent={storagePersistent} />;

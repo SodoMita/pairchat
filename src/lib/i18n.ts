@@ -121,7 +121,7 @@ const en = {
   waitingPlaceholder: "Waiting for someone to join…",
   endedPlaceholder: "This conversation has ended",
   writeMessage: "Write a message…",
-  sendMessage: "Send message", sentStatus: "Sent", deliveredStatus: "Delivered",
+  sendMessage: "Send message", sentStatus: "Sent", deliveredStatus: "Delivered", readStatus: "Read",
   rememberRandom: "Keep this stranger chat on this device",
   ephemeralRandom: "Stranger chats disappear from this device when they end unless you choose to keep them.",
   deleteHistory: "Delete local history",
