@@ -545,54 +545,63 @@ function HomeScreen({
             <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <div className="mx-auto mt-9 max-w-[720px] space-y-6">
+          <ol className="mt-10 max-w-[40rem] list-none space-y-10 p-0">
             {allGuideTopics.map((topic, index) => {
-              const ItemIcon = topic.icon;
-              const partLabels = [t("guideWhyLabel"), t("guideConsequenceLabel"), t("guideReasoningLabel")];
-              // Split the copy at sentence ends, then hand each third to its own
-              // labelled part: why it happens, what it leads to, what to know.
-              const sentences = (topic.copy.match(/[^.!?।॥。！？؟]+[.!?।॥。！？؟]*\s*/gu) ?? [topic.copy])
-                .map((sentence) => sentence.trim())
-                .filter(Boolean);
-              const perPart = Math.max(1, Math.ceil(sentences.length / 3));
-              const parts = [0, 1, 2]
-                .map((slot) => sentences.slice(slot * perPart, (slot + 1) * perPart).join(" ").trim())
-                .filter(Boolean);
+              const explicit = topic.copy.split(/\n\n+/).map((part) => part.trim()).filter(Boolean);
+              const packed = explicit.length > 1 ? explicit : (() => {
+                const sentences = topic.copy.match(/[^.!?।॥。！？؟]+[.!?।॥。！？؟]*\s*/gu) ?? [topic.copy];
+                const parts: string[] = [];
+                let current = "";
+                for (const raw of sentences) {
+                  const sentence = raw.trim();
+                  if (!sentence) continue;
+                  const joined = current ? `${current} ${sentence}` : sentence;
+                  if (current && joined.length > 180) {
+                    parts.push(current);
+                    current = sentence;
+                  } else {
+                    current = joined;
+                  }
+                }
+                if (current) parts.push(current);
+                return parts;
+              })();
+              const why = packed[0] ?? topic.copy;
+              const know = packed.length > 1 ? packed[packed.length - 1] : why;
+              const consequence = packed.length > 2 ? packed.slice(1, -1).join(" ") : packed[1] ?? why;
+              const labeled = [
+                [t("guideWhyLabel"), why],
+                [t("guideConsequenceLabel"), consequence],
+                [t("guideReasoningLabel"), know],
+              ] as const;
               return (
-                <article key={topic.title} className="rounded-2xl border border-[#e7e6df] bg-white/90 p-6 sm:p-8">
-                  <h3 className="flex items-start gap-3 text-[17px] font-extrabold leading-[1.4] text-[#23302c]">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={17} /></span>
-                    <span className="min-w-0">
-                      <span className="me-2 text-[10px] font-extrabold tabular-nums tracking-widest text-[#b0b5b1]">{String(index + 1).padStart(2, "0")}</span>
-                      {topic.title}
-                    </span>
+                <li key={topic.title}>
+                  <h3 className="text-[1.2rem] font-extrabold leading-snug tracking-[-0.02em] text-[#23302c]">
+                    <span className="me-2 text-[#c96a54]">{index + 1}.</span>
+                    {topic.title}
                   </h3>
-                  <div className="mt-4 space-y-3.5 border-t border-[#eceade] pt-4 text-[15px] leading-[1.85] text-[#4f5c57]">
-                    {parts.map((part, partIndex) => (
-                      <p key={partIndex}>
-                        <strong className="font-extrabold text-[#27322f]">{partLabels[partIndex]}: </strong>
-                        {part}
-                      </p>
-                    ))}
-                  </div>
-                </article>
+                  {labeled.map(([label, body]) => (
+                    <p key={label} className="mt-3 text-[17px] leading-[1.75] text-[#44524c]">
+                      <strong className="font-extrabold text-[#27322f]">{label}. </strong>
+                      {body}
+                    </p>
+                  ))}
+                </li>
               );
             })}
-          </div>
+          </ol>
 
-          <div className="mt-8 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
-            <div className="p-6 sm:p-8">
-              <h3 className="text-[18px] font-extrabold leading-7 tracking-[-0.03em] text-[#2a3531]">{t("guidePatternTitle")}</h3>
-              <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                {patterns.map((pattern) => (
-                  <div key={pattern.title} className="rounded-xl bg-white/85 p-3.5">
-                    <p className="text-[12px] font-extrabold text-[#27322f]">{pattern.title}</p>
-                    <p className="mt-1 text-[11px] leading-5 text-[#5a6661]">{pattern.copy}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <p className="border-t border-[#e1e6da] px-6 py-4 text-[10.5px] leading-5 text-[#7d887f] sm:px-8">{t("guideFootnote")}</p>
+          <div className="mt-12 max-w-[40rem] border-t border-[#e4e6de] pt-8">
+            <h3 className="text-[1.15rem] font-extrabold leading-snug tracking-[-0.02em] text-[#2a3531]">{t("guidePatternTitle")}</h3>
+            <ul className="mt-5 list-disc space-y-4 ps-5 text-[17px] leading-[1.7] text-[#44524c]">
+              {patterns.map((pattern) => (
+                <li key={pattern.title}>
+                  <strong className="font-extrabold text-[#27322f]">{pattern.title}. </strong>
+                  {pattern.copy}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-8 text-[15px] leading-7 text-[#6d7a74]">{t("guideFootnote")}</p>
           </div>
         </section>
 
