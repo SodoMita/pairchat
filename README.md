@@ -1,6 +1,8 @@
 # Luma — anonymous text chat roulette
 
-> **Preview URLs are temporary.** Use the live E2B link in the latest handoff; an older preview URL may no longer host a running app. The default GitHub branch is `main`.
+> **Preview:** https://3000-ip73k2mzc81n3241ias59.e2b.app
+>
+> Preview URLs are temporary. The default GitHub branch is `main`.
 
 Luma is a calm, anonymous one-to-one text chat. Meet another person who is searching at the same time, or create a private invite link for exactly one friend. Waiting depends on whether someone else is online. No profiles, no accounts, no images or calls.
 
@@ -50,9 +52,9 @@ same-origin JSON request and a participant bearer credential.
 
 ## Connection reliability and what to expect
 
-- A stranger chat needs **two different browser sessions searching at the same time**. The
-  matching screen says so and offers a private invite while the queue is empty. Two tabs in the
-  same browser share one session and cannot be matched to each other.
+- A stranger chat needs **two people searching at the same time**. Two tabs in the same
+  browser can meet each other if nobody else is in the queue, so a solo test still works.
+  The matching screen also offers a private invite while you wait.
 - Closing or reloading during a search no longer silently strands the browser in a 429
   "already waiting" state. A saved waiting seat is resumed with its original encryption key;
   if that key has been lost, a fresh search replaces the *waiting* seat without claiming it.

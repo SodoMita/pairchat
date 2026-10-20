@@ -54,20 +54,20 @@ try {
   const b = await user(ctxB);
   assert.equal(await a.locator('#safety-guide').count(), 1);
   assert.equal(await a.locator('label input[type=checkbox]').count(), 0, 'no fake consent gate');
-  assert.equal(await a.locator('#safety-guide article').count(), 9, 'all nine topics are visible');
+  assert.equal(await a.locator('#safety-guide ol > li').count(), 8, 'the eight common problems are visible');
   assert.equal(await a.locator('#safety-guide button, #safety-guide a, #safety-guide input, #safety-guide select, #safety-guide details, #safety-guide summary').count(), 0, 'the guide is plain, non-interactive HTML');
-  assert.equal(await a.locator('#safety-guide article').first().locator('dt').count(), 3);
-  assert.equal(await a.locator('#safety-guide article').first().locator('dd').count(), 3);
-  assert.match(await a.locator('#safety-guide article').last().locator('h3').innerText(), /Swearing/i);
-  assert.notEqual(await a.locator('#safety-guide article').last().locator('dd').first().innerText(), 'Why it happens');
-  note('Guide renders all nine problems and consequences as static HTML without an entry checkbox');
+  const topicTitles = await a.locator('#safety-guide ol > li > h3').allInnerTexts();
+  assert.match(topicTitles.join('\n'), /Swearing/i);
+  assert.match(await a.locator('#safety-guide ol > li').first().innerText(), /Why it happens/i);
+  assert.notEqual((await a.locator('#safety-guide ol > li').first().locator('p').first().innerText()).trim(), 'Why it happens');
+  note('Guide renders the common problems as static HTML without an entry checkbox');
   for (const code of [
     'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id',
     'de', 'ja', 'sw', 'mr', 'te', 'tr', 'ta', 'vi', 'ko',
   ]) {
     await a.locator('select').selectOption(code);
-    const whyLabel = await a.locator('#safety-guide article').first().locator('dt').first().innerText();
-    assert.notEqual(whyLabel, 'Why it happens', `Guide label fell back to English for ${code}`);
+    const whyLabel = await a.locator('#safety-guide ol > li').first().locator('strong').first().innerText();
+    assert.notEqual(whyLabel.replace(/[:：]\s*$/u, ''), 'Why it happens', `Guide label fell back to English for ${code}`);
     assert.notEqual(await a.locator('#safety-guide h3').last().innerText(),
       'The patterns that follow', `Pattern heading fell back to English for ${code}`);
   }

@@ -65,7 +65,7 @@ const entry = (input: {
     guidePattern5Copy: input.patterns[4].copy,
     guideWhyLabel: "Why it happens",
     guideConsequenceLabel: "What it can lead to",
-    guideReasoningLabel: "What is actually going on",
+    guideReasoningLabel: "What to know",
     guideExpand: "Read the explanation",
     guideCollapse: "Hide the explanation",
   };

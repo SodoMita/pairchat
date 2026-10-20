@@ -476,9 +476,8 @@ function HomeScreen({
     buildGuideTopic(Ban, t("guideSexualTitle"), "Sexual"),
     buildGuideTopic(LockKeyhole, t("guidePrivacyTitle"), "Privacy"),
     buildGuideTopic(Link2, t("guideSpamTitle"), "Spam"),
-    buildGuideTopic(Heart, t("guideMinorTitle"), "Minor"),
-    buildGuideTopic(MessageCircle, t("guideConsentTitle"), "Consent"),
     buildGuideTopic(MessageCircle, t("guideSwearTitle"), "Swear"),
+    buildGuideTopic(Heart, t("guideMinorTitle"), "Minor"),
   ];
 
   const patterns = [
@@ -557,37 +556,15 @@ function HomeScreen({
             <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <ol className="mt-9 grid gap-4 lg:grid-cols-2">
-            {allGuideTopics.map((topic, index) => {
-              const ItemIcon = topic.icon;
-              return (
-                <li key={topic.topicKey} className="h-full">
-                  <article className="h-full rounded-2xl border border-[#e7e6df] bg-white/85 p-5 sm:p-6">
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={18} /></span>
-                      <div>
-                        <span className="text-[10px] font-extrabold tabular-nums tracking-widest text-[#a5aba6]">{String(index + 1).padStart(2, "0")}</span>
-                        <h3 className="text-[14px] font-extrabold leading-5 text-[#2b3733]">{topic.title}</h3>
-                      </div>
-                    </div>
-                    <dl className="mt-5 space-y-3.5 border-t border-[#ecede6] pt-4">
-                      <div>
-                        <dt className="text-[11px] font-extrabold text-[#39443d]">{t("guideWhyLabel")}</dt>
-                        <dd className="mt-1 text-[11.5px] leading-[1.65] text-[#65716c]">{topic.why}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] font-extrabold text-[#39443d]">{t("guideConsequenceLabel")}</dt>
-                        <dd className="mt-1 text-[11.5px] leading-[1.65] text-[#65716c]">{topic.consequence}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] font-extrabold text-[#39443d]">{t("guideReasoningLabel")}</dt>
-                        <dd className="mt-1 text-[11.5px] leading-[1.65] text-[#65716c]">{topic.reasoning}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                </li>
-              );
-            })}
+          <ol className="mt-9 max-w-[760px] list-decimal space-y-8 ps-6 text-[#3a4541] marker:font-extrabold marker:text-[#c96a54]">
+            {allGuideTopics.map((topic) => (
+              <li key={topic.topicKey} className="ps-2">
+                <h3 className="text-[17px] font-extrabold leading-6 text-[#2b3733]">{topic.title}</h3>
+                <p className="mt-3 text-[14px] leading-7 text-[#5a6661]"><strong className="font-extrabold text-[#27322f]">{t("guideWhyLabel")}: </strong>{topic.why}</p>
+                <p className="mt-2 text-[14px] leading-7 text-[#5a6661]"><strong className="font-extrabold text-[#27322f]">{t("guideConsequenceLabel")}: </strong>{topic.consequence}</p>
+                <p className="mt-2 text-[14px] leading-7 text-[#5a6661]"><strong className="font-extrabold text-[#27322f]">{t("guideReasoningLabel")}: </strong>{topic.reasoning}</p>
+              </li>
+            ))}
           </ol>
 
           <div className="mt-8 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">

@@ -175,7 +175,10 @@ export async function POST(request: NextRequest) {
     }
 
     const [sessionWaiting] = await tx
-      .select({ roomId: chatRooms.id })
+      .select({
+        roomId: chatRooms.id,
+        waitingClientId: chatParticipants.clientId,
+      })
       .from(chatParticipants)
       .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
       .where(
@@ -187,11 +190,26 @@ export async function POST(request: NextRequest) {
         ),
       )
       .limit(1);
+    if (sessionWaiting && sessionWaiting.waitingClientId !== accessHash) {
+      // A second tab in this browser is already waiting. Pair them instead of
+      // killing the first search — otherwise a solo tester can never connect.
+      await tx.insert(chatParticipants).values({
+        roomId: sessionWaiting.roomId,
+        clientId: accessHash,
+        abuseSessionHash,
+        seat: 2,
+        publicKey,
+        signingKey,
+      });
+      await tx
+        .update(chatRooms)
+        .set({ status: "active", updatedAt: now })
+        .where(eq(chatRooms.id, sessionWaiting.roomId));
+      return sessionWaiting.roomId;
+    }
     if (sessionWaiting) {
-      // The user may have reloaded or lost the local capability for this
-      // waiting seat. Their high-entropy abuse session authorizes closing the
-      // old *waiting* room, never claiming its participant credential. The
-      // old tab will get room:null from GET and stop searching.
+      // Same tab/credential reloading without the local key. Close the old
+      // waiting seat; never claim its participant credential.
       await tx
         .update(chatParticipants)
         .set({ leftAt: now, lastSeenAt: now })
@@ -265,7 +283,6 @@ export async function POST(request: NextRequest) {
           isNotNull(chatParticipants.publicKey),
           isNotNull(chatParticipants.signingKey),
           ne(chatParticipants.clientId, accessHash),
-          ne(chatParticipants.abuseSessionHash, abuseSessionHash),
           sql`${chatParticipants.lastSeenAt} > now() - interval '45 seconds'`,
         ),
       )
