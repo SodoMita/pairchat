@@ -5,6 +5,7 @@ import {
   CANVAS_BRUSHES,
   CANVAS_HEIGHT,
   CANVAS_MAX_STROKES,
+  CANVAS_MAX_POINTS,
   CANVAS_SIZES,
   CANVAS_WIDTH,
   decryptCanvasEvent,
@@ -54,16 +55,21 @@ function redraw(canvas: HTMLCanvasElement | null, strokes: CanvasStroke[]) {
 
 export default function ChatCanvas({
   room,
+  clientId,
+  connected,
   encryption,
   incoming,
   t,
 }: {
   room: RoomSnapshot;
+  clientId: string;
+  connected: boolean;
   encryption?: ConversationEncryption;
   incoming: CanvasEnvelope | null;
   t: Translator;
 }) {
   const [status, setStatus] = useState<Status>("idle");
+  const [error, setError] = useState("");
   const [hidden, setHidden] = useState(false);
   const [color, setColor] = useState<string>(CANVAS_BRUSHES[0]);
   const [size, setSize] = useState<number>(CANVAS_SIZES[1]);
@@ -91,6 +97,7 @@ export default function ChatCanvas({
     peerStrokes.current = [];
     drawing.current = null;
     setStatus("idle");
+    setError("");
     setHidden(false);
     redraw(ownCanvas.current, []);
     redraw(peerCanvas.current, []);
@@ -112,12 +119,15 @@ export default function ChatCanvas({
     const envelope = { ...unsigned, signature };
     const response = await fetch(`/api/rooms/${room.id}/canvas`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${clientId}`,
+      },
       cache: "no-store",
       body: JSON.stringify({ envelope }),
     });
-    if (!response.ok) throw new Error("canvas send failed");
-  }, [encryption, room]);
+    if (!response.ok) throw new Error(`canvas send failed (${response.status})`);
+  }, [clientId, encryption, room]);
 
   const ingest = useCallback(async (envelope: CanvasEnvelope) => {
     if (processed.current === envelope.id) return;
@@ -131,6 +141,7 @@ export default function ChatCanvas({
         const event = await decryptCanvasEvent(encryption, room, envelope);
         if (event.type === "invite") {
           if (!isCompatibleInvite(event)) return;
+          if (status === "active" && envelope.sessionId === sessionId.current) return;
           if (Date.now() - inviteAt.current < 1500) return;
           sessionId.current = envelope.sessionId;
           lastPeerSeq.current = envelope.seq;
@@ -183,14 +194,8 @@ export default function ChatCanvas({
     resetLocal();
   }, [resetLocal, room.id]);
 
-  const invite = async () => {
-    if (Date.now() - inviteAt.current < 4000) return;
-    inviteAt.current = Date.now();
-    sessionId.current = crypto.randomUUID();
-    seq.current = 0;
-    boardGeneration.current = 0;
-    lastPeerSeq.current = -1;
-    setStatus("inviting");
+  const sendInvite = useCallback(async () => {
+    if (!connected || !sessionId.current) return;
     try {
       await sendEvent({
         type: "invite",
@@ -200,17 +205,47 @@ export default function ChatCanvas({
         units: "normalized",
         brushes: [...CANVAS_BRUSHES],
       });
+      setError("");
     } catch {
-      resetLocal();
+      // A temporary disconnect is not a decline. Keep the request open so
+      // the other browser can receive a retry when it returns from background.
+      setError(t("peerNotConnected"));
     }
+  }, [connected, sendEvent, t]);
+
+  useEffect(() => {
+    if (status !== "inviting") return;
+    const retry = () => {
+      if (document.visibilityState === "visible") void sendInvite();
+    };
+    const timer = window.setInterval(retry, 6000);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [sendInvite, status]);
+
+  const invite = () => {
+    if (!connected || Date.now() - inviteAt.current < 4000) return;
+    inviteAt.current = Date.now();
+    sessionId.current = crypto.randomUUID();
+    seq.current = 0;
+    boardGeneration.current = 0;
+    lastPeerSeq.current = -1;
+    setError("");
+    setStatus("inviting");
+    void sendInvite();
   };
 
   const accept = async () => {
+    if (!connected) return;
     try {
       await sendEvent({ type: "accept" });
+      setError("");
       setStatus("active");
     } catch {
-      resetLocal();
+      setError(t("peerNotConnected"));
     }
   };
 
@@ -242,13 +277,14 @@ export default function ChatCanvas({
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (status !== "active" || hidden) return;
+    if (status !== "active" || hidden || !connected) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     drawing.current = { tool, color, size, points: [pointFromEvent(event)] };
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
+    if (!drawing.current || !connected) return;
+    if (drawing.current.points.length >= 960) return;
     drawing.current.points.push(pointFromEvent(event));
     redraw(ownCanvas.current, [...ownStrokes.current, drawing.current]);
   };
@@ -257,18 +293,25 @@ export default function ChatCanvas({
     const stroke = drawing.current;
     drawing.current = null;
     if (!stroke || stroke.points.length === 0) return;
-    const points = stroke.points.length > 48 ? stroke.points.filter((_, index) => index % 2 === 0) : stroke.points;
+    const points = stroke.points.length > CANVAS_MAX_POINTS
+      ? Array.from({ length: CANVAS_MAX_POINTS }, (_, index) =>
+          stroke.points[Math.round(index * (stroke.points.length - 1) / (CANVAS_MAX_POINTS - 1))],
+        )
+      : stroke.points;
     const next = { ...stroke, points };
     ownStrokes.current = [...ownStrokes.current, next].slice(-CANVAS_MAX_STROKES);
     redraw(ownCanvas.current, ownStrokes.current);
     try {
       await sendEvent({ type: "stroke", tool: next.tool, color: next.color, size: next.size, points: next.points });
+      setError("");
     } catch {
-      // Keep the local stroke even if the peer is briefly gone.
+      setError(t("peerNotConnected"));
+      // Keep the local stroke, but say that it was not delivered to the peer.
     }
   };
 
   const undo = async () => {
+    if (!connected) return;
     ownStrokes.current = ownStrokes.current.slice(0, -1);
     redraw(ownCanvas.current, ownStrokes.current);
     try {
@@ -279,6 +322,7 @@ export default function ChatCanvas({
   };
 
   const clearMine = async () => {
+    if (!connected) return;
     ownStrokes.current = [];
     redraw(ownCanvas.current, []);
     try {
@@ -293,8 +337,9 @@ export default function ChatCanvas({
       <div className="flex shrink-0 items-center justify-end border-b border-[#ecece7] px-4 py-2 sm:px-6">
         <button
           type="button"
-          onClick={() => void invite()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] hover:bg-[#f7f7f3]"
+          onClick={invite}
+          disabled={!connected || !encryption}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] hover:bg-[#f7f7f3] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Pencil size={13} /> {t("canvasDraw")}
         </button>
@@ -305,7 +350,12 @@ export default function ChatCanvas({
   if (status === "inviting") {
     return (
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#ecece7] px-4 py-2 text-[11px] text-[#65716c] sm:px-6">
-        <span>{t("canvasWaiting")}</span>
+        <span className="flex flex-col gap-1">
+          <span>{t("canvasWaiting")}</span>
+          {(error || !connected) && (
+            <span role="status" className="text-[#c2412a]">{error || t("peerNotConnected")}</span>
+          )}
+        </span>
         <button type="button" onClick={() => void disable()} className="font-extrabold text-[#929995]">{t("cancel")}</button>
       </div>
     );
@@ -314,9 +364,14 @@ export default function ChatCanvas({
   if (status === "invited") {
     return (
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#ecece7] bg-[#fff8f4] px-4 py-2 text-[11px] text-[#8a6d63] sm:px-6">
-        <span className="font-semibold">{t("canvasInviteCopy")}</span>
+        <span className="flex flex-col gap-1 font-semibold">
+          <span>{t("canvasInviteCopy")}</span>
+          {(error || !connected) && (
+            <span role="status" className="text-[#c2412a]">{error || t("peerNotConnected")}</span>
+          )}
+        </span>
         <span className="flex gap-2">
-          <button type="button" onClick={() => void accept()} className="rounded-lg bg-[#ff6747] px-3 py-1.5 text-[10px] font-extrabold text-white">{t("canvasAccept")}</button>
+          <button type="button" onClick={() => void accept()} disabled={!connected} className="rounded-lg bg-[#ff6747] px-3 py-1.5 text-[10px] font-extrabold text-white disabled:opacity-50">{t("canvasAccept")}</button>
           <button type="button" onClick={() => void decline()} className="rounded-lg border border-[#e1e3dd] px-3 py-1.5 text-[10px] font-extrabold">{t("canvasDecline")}</button>
         </span>
       </div>
@@ -325,6 +380,11 @@ export default function ChatCanvas({
 
   return (
     <div className="shrink-0 border-b border-[#ecece7] bg-[#fafaf7]">
+      {(!connected || error) && (
+        <p role="status" className="border-b border-[#f0d4c6] bg-[#fff6ef] px-4 py-2 text-[11px] font-semibold text-[#c2412a] sm:px-6">
+          {error || t("peerNotConnected")}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2 px-4 py-2 sm:px-6">
         <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8a918e]">{t("canvasDraw")}</span>
         <div className="flex gap-1">

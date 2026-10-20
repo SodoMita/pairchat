@@ -91,8 +91,20 @@ uses its own browser profiles; run it on a test instance, not against other peop
 npm i --no-save playwright
 npx playwright install --with-deps chromium
 BASE=http://localhost:3000 node scripts/browser-check.mjs
+BASE=http://localhost:3000 node scripts/canvas-browser-check.mjs
 npx next typegen && npx tsc --noEmit && npm run build
 ```
+
+## Shared canvas
+
+Either person can request a drawing board from an active chat; the other person accepts
+before drawing starts. Canvas envelopes are encrypted and signed separately from text
+messages. A request no longer closes immediately: it carries the same room bearer token
+as the text chat. If the other app is backgrounded, the request remains pending and is
+retried while the sender is present. The board also stays visible during a brief peer
+connection drop, rather than losing the drawing. When the peer returns, the invitation
+can be accepted and strokes appear on both devices. Strokes are not stored on the server;
+a recipient that remains offline cannot receive them later.
 
 ## What usually happens in random anonymous chats
 

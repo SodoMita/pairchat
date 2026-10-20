@@ -940,9 +940,11 @@ function ChatScreen({
                </div>
              </div>
 
-            {canvasEnabled && !waiting && !ended && secureReady && (
+            {canvasEnabled && !waiting && !ended && (
               <ChatCanvas
                 room={room}
+                clientId={clientId}
+                connected={relayReady && Boolean(safetyCode)}
                 encryption={conversations.find((item) => item.roomId === room.id)?.encryption}
                 incoming={canvasIncoming}
                 t={t}
@@ -1703,7 +1705,9 @@ export default function ChatApp() {
     let disposed = false;
     // The relay handles presence; this poll reconciles room status and keys.
     const refresh = async () => {
-      if (document.visibilityState !== "visible") return;
+      // A private-room host must notice a guest even if its tab is backgrounded.
+      // Active rooms can still use the slow, visible-only reconciliation poll.
+      if (document.visibilityState !== "visible" && room.status !== "waiting") return;
       try {
         const data = await requestJson<{ room: RoomSnapshot }>(
           `/api/rooms/${roomId}`,
@@ -1730,7 +1734,10 @@ export default function ChatApp() {
       }
     };
     void refresh();
-    const poll = window.setInterval(() => void refresh(), 20_000);
+    const poll = window.setInterval(
+      () => void refresh(),
+      room.status === "waiting" ? 2_000 : 20_000,
+    );
     document.addEventListener("visibilitychange", refresh);
     return () => {
       disposed = true;
@@ -1824,6 +1831,20 @@ export default function ChatApp() {
         try {
           const peer = JSON.parse(payload) as { connected?: boolean };
           setRelayReady(peer.connected === true);
+          if (peer.connected === true && roomSnapshot.status === "waiting") {
+            void requestJson<{ room: RoomSnapshot }>(`/api/rooms/${roomId}`, {
+              headers: { Authorization: `Bearer ${clientId}` },
+              signal: AbortSignal.timeout(8000),
+            }).then((data) => {
+              if (abort.signal.aborted) return;
+              setRoom((current) => current?.id === roomId && !sameRoomConnection(current, data.room)
+                ? data.room
+                : current);
+              setConversations(saveLocalRoom(data.room, clientId));
+            }).catch(() => {
+              // The waiting-room poll remains a safety net for a dropped event.
+            });
+          }
         } catch {
           setRelayReady(false);
         }
