@@ -815,7 +815,20 @@ function ChatScreen({
                 <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54] lg:hidden"><UserRound size={18} /></div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2"><h1 className="truncate text-[14px] font-extrabold text-[#293430]">{room.kind === "private" ? t("privateConversation") : t("yourConversation")}</h1>{room.kind === "private" && <LockKeyhole size={12} className="text-[#84918c]" />}</div>
-                  <p className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-[#8b9390]" aria-live="polite"><span className={`h-1.5 w-1.5 rounded-full ${ended ? "bg-[#b7bcb8]" : waiting || !secureReady ? "animate-pulse bg-[#e5a64f]" : "bg-[#72b05f]"}`} />{ended ? t("conversationEnded") : waiting ? t("waitingSomeone") : !secureReady ? t("connecting") : partnerTyping ? t("typingIndicator") : t("connected")}</p>
+                  <p className={`mt-1 flex items-center gap-1.5 text-[10px] font-semibold ${partnerUnavailable && !waiting && !ended ? "text-[#c2412a]" : "text-[#8b9390]"}`} aria-live="polite">
+                    <span className={`h-1.5 w-1.5 rounded-full ${ended ? "bg-[#b7bcb8]" : partnerUnavailable && !waiting ? "bg-[#d8452c]" : waiting || !secureReady ? "animate-pulse bg-[#e5a64f]" : "bg-[#72b05f]"}`} />
+                    {ended
+                      ? t("conversationEnded")
+                      : waiting
+                        ? t("waitingSomeone")
+                        : !secureReady
+                          ? t("connecting")
+                          : partnerUnavailable
+                            ? <span className="truncate">{t("peerNotConnected")}</span>
+                            : partnerTyping
+                              ? t("typingIndicator")
+                              : t("connected")}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -829,10 +842,17 @@ function ChatScreen({
               </div>
             </div>
 
-            {room.kind === "random" && !ended && partnerUnavailable && (
-              <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#f0d4c6] bg-[#fff6ef] px-4 py-3 text-[11px] text-[#805445] sm:px-6">
-                <span>{t("peerNotConnected")}</span>
-                <button type="button" onClick={() => setConfirmAction("next")} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#ff6747] px-3 font-bold text-white hover:bg-[#ee5b3d]"><Shuffle size={13} /> {t("meetNew")}</button>
+            {!waiting && !ended && partnerUnavailable && (
+              <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#f0c0ae] bg-[#fff1e9] px-4 py-3 text-[11px] font-semibold text-[#a23c22] sm:px-6">
+                <span className="flex items-start gap-2">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[#d8452c]" aria-hidden="true" />
+                  <span>{t("peerNotConnected")}</span>
+                </span>
+                {room.kind === "random" && !waiting ? (
+                  <button type="button" onClick={() => setConfirmAction("next")} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#ff6747] px-3 font-bold text-white hover:bg-[#ee5b3d]"><Shuffle size={13} /> {t("meetNew")}</button>
+                ) : room.kind === "private" && waiting ? (
+                  <button type="button" onClick={onCopy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#ff6747] px-3 font-bold text-white hover:bg-[#ee5b3d]"><Copy size={13} /> {copied ? t("linkCopied") : t("copyInvite")}</button>
+                ) : null}
               </div>
             )}
             <div ref={scrollRef} className="chat-scroll flex-1 overflow-y-auto px-4 py-6 sm:px-8">
