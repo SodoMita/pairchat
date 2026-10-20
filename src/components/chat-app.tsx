@@ -545,19 +545,41 @@ function HomeScreen({
             <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <div className="mx-auto mt-9 max-w-[860px] space-y-5">
+          <div className="mx-auto mt-9 max-w-[720px] space-y-6">
             {allGuideTopics.map((topic, index) => {
               const ItemIcon = topic.icon;
+              // One wall of text is hard to read, and every locale writes long
+              // sentences. Break the copy at sentence ends into short blocks
+              // with a comfortable measure.
+              const sentences = topic.copy.match(/[^.!?।॥。！？؟]+[.!?।॥。！？؟]*\s*/gu) ?? [topic.copy];
+              const paragraphs: string[] = [];
+              let current = "";
+              for (const raw of sentences) {
+                const sentence = raw.trim();
+                if (!sentence) continue;
+                const joined = current ? `${current} ${sentence}` : sentence;
+                if (current && joined.length > 165) {
+                  paragraphs.push(current);
+                  current = sentence;
+                } else {
+                  current = joined;
+                }
+              }
+              if (current) paragraphs.push(current);
               return (
-                <article key={topic.title} className="rounded-2xl border border-[#e7e6df] bg-white/85 p-6 sm:p-8">
-                  <h3 className="flex items-center gap-3 text-[16px] font-extrabold leading-6 text-[#23302c]">
+                <article key={topic.title} className="rounded-2xl border border-[#e7e6df] bg-white/90 p-6 sm:p-8">
+                  <h3 className="flex items-start gap-3 text-[17px] font-extrabold leading-[1.4] text-[#23302c]">
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={17} /></span>
                     <span className="min-w-0">
-                      <span className="me-2 text-[10px] font-extrabold tabular-nums tracking-widest text-[#a5aba6]">{String(index + 1).padStart(2, "0")}</span>
+                      <span className="me-2 text-[10px] font-extrabold tabular-nums tracking-widest text-[#b0b5b1]">{String(index + 1).padStart(2, "0")}</span>
                       {topic.title}
                     </span>
                   </h3>
-                  <p className="mt-4 border-t border-[#eceade] pt-4 text-[13px] leading-[1.85] text-[#5c6a64]">{topic.copy}</p>
+                  <div className="mt-4 space-y-3 border-t border-[#eceade] pt-4 text-[15px] leading-[1.85] text-[#4f5c57]">
+                    {paragraphs.map((paragraph, paragraphIndex) => (
+                      <p key={paragraphIndex} className={paragraphIndex === 0 ? "text-[#2e3a35]" : undefined}>{paragraph}</p>
+                    ))}
+                  </div>
                 </article>
               );
             })}
