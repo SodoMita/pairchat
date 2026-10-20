@@ -1,6 +1,6 @@
 # Luma — anonymous text chat roulette
 
-> **Preview:** https://3000-ihhtk1d3mai8man53rpj5.e2b.app
+> **Preview:** https://3000-itden3yk7rin9ufs1q9gg.e2b.app
 
 The live host changes when the sandbox restarts. The repository itself stays at
 https://github.com/SodoMita/pairchat

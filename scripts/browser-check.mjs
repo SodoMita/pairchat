@@ -18,8 +18,7 @@ const pageA = await ctxA.newPage(); const pageB = await ctxB.newPage();
 await pageA.goto(BASE, { waitUntil:'networkidle' }); await pageB.goto(BASE, { waitUntil:'networkidle' });
 check('hero renders', await pageA.getByRole('heading', { name:/Meet someone/i }).count() === 1);
 check('safety guide section renders', await pageA.locator('#safety-guide').count() === 1);
-check('guide has 6 core problem cards', await pageA.locator('#safety-guide article').count() === 6, String(await pageA.locator('#safety-guide article').count()));
-check('acknowledge checkbox present', await pageA.locator('#safety-guide input[type=checkbox], label input[type=checkbox]').count() >= 1);
+check('guide lists every problem without a checkbox', (await pageA.locator('#safety-guide article').count()) >= 9 && (await pageA.locator('#safety-guide button, #safety-guide input').count()) === 0, String(await pageA.locator('#safety-guide article').count()));
 check('20 languages in selector', await pageA.locator('select option').count() === 20, String(await pageA.locator('select option').count()));
 for (const [code, marker] of [['es','Conoce a alguien'],['fr','Rencontrez'],['de','Triff jemanden'],['ja','新しい'],['ko','새로운 사람을'],['hi','किसी'],['ar','قابل'],['ru','Познакомьтесь'],['zh','遇见'],['vi','Gặp một người'],['tr',''],['ta',''],['te',''],['bn',''],['sw',''],['mr',''],['id',''],['pt',''],['ur',''],['it','']]) {
   if (!marker) continue;

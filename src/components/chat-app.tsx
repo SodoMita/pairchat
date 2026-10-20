@@ -383,8 +383,6 @@ function HomeScreen({
   onDeleteHistory,
   soundEnabled,
   onToggleSound,
-  guideAcknowledged,
-  onAcknowledgeGuide,
 }: {
   onRandom: () => void;
   onPrivate: () => void;
@@ -398,8 +396,6 @@ function HomeScreen({
   onDeleteHistory: (conversation: LocalConversation) => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
-  guideAcknowledged: boolean;
-  onAcknowledgeGuide: () => void;
 }) {
   const features = [
     [Zap, t("instantTitle"), t("instantCopy")],
@@ -431,19 +427,8 @@ function HomeScreen({
     buildGuideTopic(Link2, t("guideSpamTitle"), "Spam"),
     buildGuideTopic(Heart, t("guideMinorTitle"), "Minor"),
     buildGuideTopic(MessageCircle, t("guideConsentTitle"), "Consent"),
+    buildGuideTopic(MessageCircle, t("guideSwearTitle"), "Swear"),
   ];
-  const [showAllGuide, setShowAllGuide] = useState(false);
-  const [expandedTopic, setExpandedTopic] = useState<string | null>(null);
-  const visibleGuideTopics = showAllGuide ? allGuideTopics : allGuideTopics.slice(0, 4);
-
-  const swearTopic: GuideTopic = {
-    icon: MessageCircle,
-    title: t("guideSwearTitle"),
-    why: t("guideSwearWhy"),
-    consequence: t("guideSwearConsequence"),
-    reasoning: t("guideSwearReasoning"),
-    topicKey: "Swear",
-  };
 
   const patterns = [
     { title: t("guidePattern1Title"), copy: t("guidePattern1Copy") },
@@ -474,20 +459,7 @@ function HomeScreen({
               {t("heroLead")} <span className="relative text-[#ff6747]">{t("heroAccent")}<svg className="absolute -bottom-2 start-1 w-[96%]" viewBox="0 0 240 12" fill="none" aria-hidden="true"><path d="M3 8C62 2 158 2 237 6" stroke="#ffb39f" strokeWidth="5" strokeLinecap="round" /></svg></span>
             </h1>
             <p className="mt-7 max-w-[530px] text-[17px] leading-[1.75] text-[#68716e] sm:text-[18px]">{t("heroCopy")}</p>
-            <label className="mt-7 flex max-w-[530px] cursor-pointer items-start gap-3 rounded-2xl border border-[#e4e4dc] bg-white/80 p-3.5 text-[11px] leading-5 text-[#68716e] transition hover:border-[#d9ddd5] hover:bg-white">
-              <input
-                type="checkbox"
-                checked={guideAcknowledged}
-                onChange={onAcknowledgeGuide}
-                aria-label={t("guideAcceptAria")}
-                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#ff6747]"
-              />
-              <span>
-                <a href="#safety-guide" className="font-extrabold text-[#394340] underline decoration-[#f2b7a5] decoration-2 underline-offset-2 hover:text-[#c65338]">{t("guideAccept")}</a>
-                <span className="mt-0.5 block text-[10px] text-[#98a09c]">{t("guideNav")} · {t("anonymousDesign")}</span>
-              </span>
-            </label>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <button onClick={onRandom} disabled={busy} className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-[#ff6747] px-7 text-[14px] font-extrabold text-white shadow-[0_12px_28px_rgba(255,103,71,0.24)] transition hover:-translate-y-0.5 hover:bg-[#f65c3d] disabled:opacity-60">
                 {busy ? <LoaderCircle size={18} className="animate-spin" /> : <Shuffle size={18} />}{t("chatStranger")}<ArrowRight size={17} className="transition-transform group-hover:translate-x-1 rtl:rotate-180" />
               </button>
@@ -523,54 +495,24 @@ function HomeScreen({
             <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <div className="mt-9 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-2">
-            {[...visibleGuideTopics, swearTopic].map((topic) => {
+          <div className="mt-9 grid gap-4">
+            {allGuideTopics.map((topic) => {
               const ItemIcon = topic.icon;
-              const open = expandedTopic === topic.topicKey;
               return (
-                <article key={topic.topicKey} className="overflow-hidden rounded-2xl border border-[#e7e6df] bg-white/80 transition hover:border-[#f0c5b7] hover:bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedTopic(open ? null : topic.topicKey)}
-                    aria-expanded={open}
-                    className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-4 text-start"
-                  >
-                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]"><ItemIcon size={18} /></span>
-                    <span className="min-w-0">
-                      <h3 className="text-[13px] font-extrabold text-[#2b3733]">{topic.title}</h3>
-                      <p className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-[#a0a6a3]">{open ? t("guideCollapse") : t("guideExpand")}</p>
-                    </span>
-                    <ChevronRight size={16} className={`text-[#ff6747] transition-transform rtl:rotate-180 ${open ? "rotate-90" : ""}`} />
-                  </button>
-                  {open && (
-                    <div className="space-y-3 border-t border-[#ecede6] bg-[#fcfaf6] p-5 text-[11.5px] leading-5 text-[#3a4541]">
-                      <div>
-                        <p className="font-extrabold text-[#27322f]">{t("guideWhyLabel")}</p>
-                        <p className="mt-1 text-[11px] text-[#65716c]">{topic.why}</p>
-                      </div>
-                      <div>
-                        <p className="font-extrabold text-[#27322f]">{t("guideConsequenceLabel")}</p>
-                        <p className="mt-1 text-[11px] text-[#65716c]">{topic.consequence}</p>
-                      </div>
-                      <div>
-                        <p className="font-extrabold text-[#27322f]">{t("guideReasoningLabel")}</p>
-                        <p className="mt-1 text-[11px] text-[#65716c]">{topic.reasoning}</p>
-                      </div>
-                    </div>
-                  )}
+                <article key={topic.topicKey} className="rounded-2xl border border-[#e7e6df] bg-white/80 p-5 sm:p-6">
+                  <h3 className="flex items-center gap-3 text-[15px] font-extrabold text-[#2b3733]">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={16} /></span>
+                    {topic.title}
+                  </h3>
+                  <div className="mt-4 space-y-3 text-[13px] leading-6 text-[#3a4541]">
+                    <p><strong className="font-extrabold text-[#27322f]">{t("guideWhyLabel")}. </strong><span className="text-[#65716c]">{topic.why}</span></p>
+                    <p><strong className="font-extrabold text-[#27322f]">{t("guideConsequenceLabel")}. </strong><span className="text-[#65716c]">{topic.consequence}</span></p>
+                    <p><strong className="font-extrabold text-[#27322f]">{t("guideReasoningLabel")}. </strong><span className="text-[#65716c]">{topic.reasoning}</span></p>
+                  </div>
                 </article>
               );
             })}
           </div>
-          {!showAllGuide && (
-            <button
-              type="button"
-              onClick={() => setShowAllGuide(true)}
-              className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-xl border border-[#e1e3dd] bg-white/80 px-4 text-[11px] font-extrabold text-[#59635f] transition hover:bg-white"
-            >
-              <ChevronRight size={14} className="text-[#ff6747] rtl:rotate-180" /> {t("guideNav")}
-            </button>
-          )}
 
           <div className="mt-8 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
             <div className="p-6 sm:p-8">
@@ -984,7 +926,6 @@ export default function ChatApp() {
   const [soundOn, setSoundOn] = useState(true);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [notice, setNotice] = useState("");
-  const [guideAcknowledged, setGuideAcknowledged] = useState(false);
   const openedRoomId = useRef<string | null>(null);
   const searchCrypto = useRef<ConversationEncryption | null>(null);
   const searchInFlight = useRef(false);
@@ -1009,10 +950,6 @@ export default function ChatApp() {
     const timer = window.setTimeout(() => setNotice(""), 6000);
     return () => window.clearTimeout(timer);
   }, [notice]);
-
-  const acknowledgeGuide = useCallback(() => {
-    setGuideAcknowledged((current) => !current);
-  }, []);
 
   const toggleSound = useCallback(() => {
     const next = !soundOn;
@@ -1849,5 +1786,5 @@ export default function ChatApp() {
     return <ChatScreen room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} />;
   }
 
-  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} guideAcknowledged={guideAcknowledged} onAcknowledgeGuide={acknowledgeGuide} />;
+  return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
 }
