@@ -33,6 +33,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const QUICK_REACTIONS = ["👍", "✅", "👀", "🚀"] as const;
@@ -227,6 +228,17 @@ export default function AgentChannelView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [folded.rows.length]);
 
+  useEffect(() => {
+    if (!confirmDelete && reactionTarget === null) return;
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (confirmDelete) setConfirmDelete(false);
+      else setReactionTarget(null);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [confirmDelete, reactionTarget]);
+
   const createNewChannel = async () => {
     if (creating) return;
     setCreating(true);
@@ -400,40 +412,42 @@ export default function AgentChannelView() {
     ? `curl -fsS "${origin}/static/create.mjs" -o create.mjs\nURL=$(node create.mjs "${origin}")`
     : `curl -fsS "$BASE/static/create.mjs" -o create.mjs\nURL=$(node create.mjs "$BASE")`;
 
+  const inChannel = Boolean(creds);
+
   return (
-    <div className="min-h-screen bg-[#f8f6f0] text-[#1e2927]">
-      <header className="mx-auto flex h-[76px] w-full max-w-[1200px] items-center justify-between gap-3 px-5 sm:px-8">
-        <div className="flex items-center gap-4">
-          <a
+    <div className={`${inChannel ? "flex h-[100dvh] flex-col overflow-hidden" : "min-h-[100dvh]"} bg-[#f8f6f0] text-[#1e2927]`}>
+      <header className="mx-auto flex h-13 w-full max-w-[1280px] shrink-0 items-center justify-between gap-2 px-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-[#dfe2db] bg-white/80 px-3 py-2 text-[12px] font-extrabold text-[#394340] transition hover:bg-white"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-[#dfe2db] bg-white/80 px-2.5 text-[11px] font-extrabold text-[#394340] transition hover:bg-white"
           >
-            <ArrowLeft size={14} /> Luma
-          </a>
-          <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-[#ff6747] text-white">
-              <Bot size={16} />
+            <ArrowLeft size={13} /> Luma
+          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-[#ff6747] text-white">
+              <Bot size={14} />
             </span>
-            <div>
-              <p className="text-[14px] font-extrabold leading-tight">Agent Channels</p>
-              <p className="text-[10px] font-semibold text-[#6b7571]">Mayfly-compatible E2EE log · /llms.txt</p>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-extrabold leading-tight">Agent Channels</p>
+              <p className="hidden text-[10px] font-semibold text-[#6b7571] sm:block">Mayfly-compatible E2EE log · /llms.txt</p>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <a
             href="/llms.txt"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#dfe2db] bg-white/80 px-3 text-[11px] font-extrabold text-[#495450] hover:bg-white"
+            className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-[#dfe2db] bg-white/80 px-2.5 text-[11px] font-extrabold text-[#495450] hover:bg-white"
           >
-            <FileCode2 size={13} /> llms.txt
+            <FileCode2 size={13} /> <span className="hidden xs:inline sm:inline">llms.txt</span>
           </a>
           <button
             type="button"
             onClick={() => void createNewChannel()}
             disabled={creating}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#ff6747] px-3.5 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-[#ee5b3d] disabled:opacity-60"
+            className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-[#ff6747] px-3 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-[#ee5b3d] disabled:opacity-60"
           >
             {creating ? <LoaderCircle size={13} className="animate-spin" /> : <Plus size={14} />}
             New channel
@@ -441,7 +455,7 @@ export default function AgentChannelView() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1200px] px-4 pb-12 sm:px-8">
+      <main className={`mx-auto w-full max-w-[1280px] ${inChannel ? "flex min-h-0 flex-1 flex-col px-2 pb-2 sm:px-5 sm:pb-4" : "px-3 pb-8 sm:px-6"}`}>
         {!creds ? (
           <div className="mx-auto mt-6 max-w-[780px] space-y-6">
             <section className="rounded-[28px] border border-[#e3e4dd] bg-white p-7 shadow-[0_20px_60px_rgba(30,41,39,0.07)] sm:p-10">
@@ -503,9 +517,9 @@ export default function AgentChannelView() {
             </section>
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-            <section className="flex h-[calc(100vh-116px)] min-h-[560px] flex-col overflow-hidden rounded-[26px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.09)]">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecece7] px-5 py-4">
+          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_330px] lg:gap-4">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-[22px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.09)]">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ecece7] px-4 py-2.5">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h1 className="truncate text-[16px] font-extrabold text-[#1e2927]">
@@ -715,7 +729,7 @@ export default function AgentChannelView() {
               </form>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="space-y-4 overflow-y-auto lg:pe-1">
               <div className="rounded-3xl border border-[#e3e4dd] bg-white p-5">
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-[13px] font-extrabold text-[#1e2927]">Invite a Twin AI Agent</h2>

@@ -38,6 +38,7 @@ const MAX_ROOM_CANVAS_EVENTS = 256;
 type PendingDelivery = {
   senderAccessHash: string;
   recipientAccessHash: string;
+  message: EncryptedMessageEnvelope;
   expiresAt: number;
 };
 type PendingDeliveries = Map<string, Map<string, PendingDelivery>>;
@@ -98,12 +99,11 @@ function sendOrQueue(
   recipientAccessHash: string,
   event: LiveChatEvent,
 ) {
+  enqueueRecipientEvent(roomId, recipientAccessHash, event);
   const listeners = registry.get(roomId)?.get(recipientAccessHash);
   if (listeners?.size) {
     for (const listener of listeners) listener(event);
-    return;
   }
-  enqueueRecipientEvent(roomId, recipientAccessHash, event);
 }
 
 function notifyPeerState(roomId: string) {
@@ -112,6 +112,14 @@ function notifyPeerState(roomId: string) {
   const connected = participants.size >= 2;
   for (const listeners of participants.values()) {
     for (const listener of listeners) listener({ type: "peer", connected });
+  }
+}
+
+export function notifyRoomJoined(roomId: string) {
+  const participants = registry.get(roomId);
+  if (!participants) return;
+  for (const listeners of participants.values()) {
+    for (const listener of listeners) listener({ type: "peer", connected: true });
   }
 }
 
@@ -140,6 +148,7 @@ export function publishChatMessage(
   roomPending.set(message.id, {
     senderAccessHash: senderClientId,
     recipientAccessHash,
+    message,
     expiresAt: now + TRANSIENT_TTL_MS,
   });
   pendingDeliveries.set(roomId, roomPending);
@@ -149,7 +158,10 @@ export function publishChatMessage(
   if (senderListeners) {
     for (const listener of senderListeners) listener(event);
   }
-  sendOrQueue(roomId, recipientAccessHash, event);
+  const recipientListeners = participants?.get(recipientAccessHash);
+  if (recipientListeners?.size) {
+    for (const listener of recipientListeners) listener(event);
+  }
   return true;
 }
 
@@ -205,7 +217,7 @@ export function publishReadReceipt(
       }
     }
   }
-  if (!delivered && peerAccessHash) {
+  if (peerAccessHash) {
     enqueueRecipientEvent(roomId, peerAccessHash, event);
     return true;
   }
@@ -308,6 +320,20 @@ export function subscribeToChatMessages(
   notifyPeerState(roomId);
 
   const now = Date.now();
+  const roomPending = pendingDeliveries.get(roomId);
+  if (roomPending) {
+    for (const [id, pending] of roomPending) {
+      if (pending.expiresAt <= now) {
+        roomPending.delete(id);
+        continue;
+      }
+      if (pending.recipientAccessHash === clientId) {
+        listener({ type: "message", message: pending.message });
+      }
+    }
+    if (roomPending.size === 0) pendingDeliveries.delete(roomId);
+  }
+
   const roomQueues = pendingRecipientEvents.get(roomId);
   const queued = roomQueues?.get(clientId);
   if (roomQueues && queued) {

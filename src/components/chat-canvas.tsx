@@ -21,11 +21,12 @@ import {
 import { serializeSigningKey } from "@/lib/e2ee";
 import type { ConversationEncryption } from "@/lib/local-chats";
 import type { TranslationKey } from "@/lib/i18n";
-import { Eraser, Eye, EyeOff, Pencil, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Eraser, Eye, EyeOff, Maximize2, Minimize2, Pencil, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
+import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 
 type Translator = (key: TranslationKey) => string;
-type Status = "idle" | "inviting" | "invited" | "active";
+export type CanvasUiStatus = "idle" | "inviting" | "invited" | "active";
+type Status = CanvasUiStatus;
 
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: CanvasStroke) {
   if (stroke.points.length === 0) return;
@@ -61,15 +62,22 @@ export default function ChatCanvas({
   encryption,
   queue,
   t,
+  hideIdleBar = false,
+  inviteRef,
+  onStatusChange,
 }: {
   room: RoomSnapshot;
   clientId: string;
   encryption?: ConversationEncryption;
   queue: CanvasEnvelope[];
   t: Translator;
+  hideIdleBar?: boolean;
+  inviteRef?: MutableRefObject<(() => void) | null>;
+  onStatusChange?: (status: CanvasUiStatus) => void;
 }) {
   const [status, setStatusState] = useState<Status>("idle");
   const [hidden, setHidden] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [peerAskedReset, setPeerAskedReset] = useState<number | null>(null);
   const [color, setColor] = useState<string>(CANVAS_BRUSHES[0]);
   const [size, setSize] = useState<number>(CANVAS_SIZES[1]);
@@ -97,7 +105,8 @@ export default function ChatCanvas({
   const setStatus = useCallback((next: Status) => {
     statusRef.current = next;
     setStatusState(next);
-  }, []);
+    onStatusChange?.(next);
+  }, [onStatusChange]);
 
   const resetLocal = useCallback(() => {
     sessionId.current = "";
@@ -111,16 +120,21 @@ export default function ChatCanvas({
     setPeerAskedReset(null);
     setStatus("idle");
     setHidden(false);
+    setExpanded(false);
     redraw(ownCanvas.current, []);
     redraw(peerCanvas.current, []);
   }, [setStatus]);
 
   useEffect(() => {
-    if (status === "active" && !hidden) {
+    if (hidden) {
+      drawing.current = null;
+      return;
+    }
+    if (status === "active") {
       redraw(ownCanvas.current, ownStrokes.current);
       redraw(peerCanvas.current, peerStrokes.current);
     }
-  }, [status, hidden]);
+  }, [status, hidden, expanded]);
 
   const sendEvent = useCallback(async (event: Parameters<typeof encryptCanvasEvent>[6]) => {
     if (!encryption || !room.partnerPublicId || !clientId) {
@@ -315,12 +329,10 @@ export default function ChatCanvas({
   }, [applyEvent, queue]);
 
   useEffect(() => {
-    seenIds.current = new Set();
-    queueIndex.current = 0;
-    resetLocal();
-  }, [resetLocal, room.id]);
+    onStatusChange?.("idle");
+  }, [onStatusChange, room.id]);
 
-  const invite = async () => {
+  const invite = useCallback(async () => {
     const now = Date.now();
     if (now - lastInviteSentAt.current < 2500) return;
     lastInviteSentAt.current = now;
@@ -345,7 +357,17 @@ export default function ChatCanvas({
     } catch {
       resetLocal();
     }
-  };
+  }, [resetLocal, sendEvent, setStatus]);
+
+  useEffect(() => {
+    if (!inviteRef) return;
+    inviteRef.current = () => {
+      void invite();
+    };
+    return () => {
+      inviteRef.current = null;
+    };
+  }, [invite, inviteRef]);
 
   const accept = async () => {
     setStatus("active");
@@ -435,6 +457,7 @@ export default function ChatCanvas({
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (statusRef.current !== "active" || hidden) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const startPoint = pointFromEvent(event);
     drawing.current = { tool, color, size, points: [startPoint] };
@@ -487,14 +510,15 @@ export default function ChatCanvas({
   };
 
   if (status === "idle") {
+    if (hideIdleBar) return null;
     return (
-      <div className="flex shrink-0 items-center justify-end border-b border-[#ecece7] px-4 py-2 sm:px-6">
+      <div className="flex shrink-0 items-center justify-end border-b border-[#ecece7] px-3 py-1.5 sm:px-4">
         <button
           type="button"
           onClick={() => void invite()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] hover:bg-[#f7f7f3]"
+          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-2.5 text-[10px] font-extrabold text-[#59635f] hover:bg-[#f7f7f3]"
         >
-          <Pencil size={13} /> {t("canvasDraw")}
+          <Pencil size={12} /> {t("canvasDraw")}
         </button>
       </div>
     );
@@ -502,20 +526,20 @@ export default function ChatCanvas({
 
   if (status === "inviting") {
     return (
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#ecece7] bg-[#fafaf7] px-4 py-2 text-[11px] text-[#65716c] sm:px-6">
-        <span className="font-semibold">{t("canvasWaiting")}</span>
-        <button type="button" onClick={() => void disable()} className="font-extrabold text-[#929995] hover:text-[#27322f]">{t("cancel")}</button>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#ecece7] bg-[#fafaf7] px-3 py-1.5 text-[11px] text-[#65716c] sm:px-4">
+        <span className="truncate font-semibold">{t("canvasWaiting")}</span>
+        <button type="button" onClick={() => void disable()} className="shrink-0 font-extrabold text-[#929995] hover:text-[#27322f]">{t("cancel")}</button>
       </div>
     );
   }
 
   if (status === "invited") {
     return (
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#ecece7] bg-[#fff8f4] px-4 py-2 text-[11px] text-[#8a6d63] sm:px-6">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#ecece7] bg-[#fff8f4] px-3 py-1.5 text-[11px] text-[#8a6d63] sm:px-4">
         <span className="font-semibold">{t("canvasInviteCopy")}</span>
-        <span className="flex gap-2">
-          <button type="button" onClick={() => void accept()} className="rounded-lg bg-[#ff6747] px-3 py-1.5 text-[10px] font-extrabold text-white hover:bg-[#ee5b3d]">{t("canvasAccept")}</button>
-          <button type="button" onClick={() => void decline()} className="rounded-lg border border-[#e1e3dd] bg-white px-3 py-1.5 text-[10px] font-extrabold text-[#59635f] hover:bg-[#f7f7f3]">{t("canvasDecline")}</button>
+        <span className="flex gap-1.5">
+          <button type="button" onClick={() => void accept()} className="rounded-lg bg-[#ff6747] px-2.5 py-1 text-[10px] font-extrabold text-white hover:bg-[#ee5b3d]">{t("canvasAccept")}</button>
+          <button type="button" onClick={() => void decline()} className="rounded-lg border border-[#e1e3dd] bg-white px-2.5 py-1 text-[10px] font-extrabold text-[#59635f] hover:bg-[#f7f7f3]">{t("canvasDecline")}</button>
         </span>
       </div>
     );
@@ -523,50 +547,66 @@ export default function ChatCanvas({
 
   return (
     <div className="shrink-0 border-b border-[#ecece7] bg-[#fafaf7]">
-      <div className="flex flex-wrap items-center gap-2 px-4 py-2 sm:px-6">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8a918e]">{t("canvasDraw")}</span>
-        <div className="flex gap-1">
+      <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto whitespace-nowrap px-3 py-1.5 sm:px-4">
+        <div className="flex shrink-0 items-center gap-1">
           {CANVAS_BRUSHES.map((value) => (
             <button
               key={value}
               type="button"
               aria-label={value}
               onClick={() => { setTool("brush"); setColor(value); }}
-              className={`h-6 w-6 rounded-full border ${color === value && tool === "brush" ? "border-[#1e2927] scale-110" : "border-white"}`}
+              className={`h-5 w-5 shrink-0 rounded-full border transition ${color === value && tool === "brush" ? "scale-110 border-[#1e2927] ring-2 ring-[#ff6747]/35" : "border-black/15"}`}
               style={{ background: value }}
             />
           ))}
-          <button type="button" onClick={() => setTool("eraser")} className={`grid h-6 w-6 place-items-center rounded-full border ${tool === "eraser" ? "border-[#1e2927] bg-white" : "border-[#e1e3dd] bg-white"}`} aria-label="Eraser">
-            <Eraser size={12} />
+          <button type="button" onClick={() => setTool("eraser")} className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${tool === "eraser" ? "border-[#1e2927] bg-white text-[#1e2927]" : "border-[#e1e3dd] bg-white text-[#65716c]"}`} aria-label="Eraser">
+            <Eraser size={11} />
           </button>
         </div>
-        <div className="flex gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {CANVAS_SIZES.map((value) => (
-            <button key={value} type="button" onClick={() => setSize(value)} className={`h-6 rounded-full border px-2 text-[9px] font-bold ${size === value ? "border-[#ff6747] text-[#ff6747]" : "border-[#e1e3dd] text-[#65716c]"}`}>
+            <button key={value} type="button" onClick={() => setSize(value)} className={`h-5 rounded-full border px-1.5 text-[9px] font-bold ${size === value ? "border-[#ff6747] bg-white text-[#ff6747]" : "border-[#e1e3dd] text-[#65716c]"}`}>
               {value}
             </button>
           ))}
         </div>
-        <button type="button" onClick={() => void undo()} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-extrabold text-[#59635f] hover:bg-white"><RotateCcw size={12} /> {t("canvasUndo")}</button>
-        <button type="button" onClick={() => void clearMine()} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-extrabold text-[#59635f] hover:bg-white"><Trash2 size={12} /> {t("canvasClear")}</button>
-        <button type="button" onClick={() => void requestReset()} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-extrabold text-[#59635f] hover:bg-white"><Sparkles size={12} /> {t("canvasReset")}</button>
-        <button type="button" onClick={() => setHidden((value) => !value)} className="ms-auto inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-extrabold text-[#59635f] hover:bg-white">
-          {hidden ? <Eye size={12} /> : <EyeOff size={12} />} {hidden ? t("canvasShow") : t("canvasHide")}
-        </button>
-        <button type="button" onClick={() => void disable()} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-extrabold text-[#c2412a] hover:bg-[#fff0ec]"><X size={12} /> {t("canvasDisable")}</button>
+        <button type="button" onClick={() => void undo()} className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10px] font-extrabold text-[#59635f] hover:bg-white"><RotateCcw size={11} /> {t("canvasUndo")}</button>
+        <button type="button" onClick={() => void clearMine()} className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10px] font-extrabold text-[#59635f] hover:bg-white"><Trash2 size={11} /> {t("canvasClear")}</button>
+        <button type="button" onClick={() => void requestReset()} className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[10px] font-extrabold text-[#59635f] hover:bg-white"><Sparkles size={11} /> {t("canvasReset")}</button>
+        <div className="ms-auto flex shrink-0 items-center gap-1">
+          {!hidden && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-pressed={expanded}
+              aria-label={expanded ? "Compact canvas" : "Expand canvas"}
+              title={expanded ? "Compact canvas" : "Expand canvas"}
+              className="grid h-6 w-6 place-items-center rounded-md text-[#59635f] hover:bg-white"
+            >
+              {expanded ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+            </button>
+          )}
+          <button type="button" onClick={() => setHidden((value) => !value)} className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] font-extrabold text-[#59635f] hover:bg-white">
+            {hidden ? <Eye size={11} /> : <EyeOff size={11} />} {hidden ? t("canvasShow") : t("canvasHide")}
+          </button>
+          <button type="button" onClick={() => void disable()} className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[10px] font-extrabold text-[#c2412a] hover:bg-[#fff0ec]"><X size={11} /> {t("canvasDisable")}</button>
+        </div>
       </div>
-      {peerAskedReset !== null && peerAskedReset === boardGeneration.current && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#ecece7] bg-[#fff8f4] px-4 py-1.5 text-[11px] text-[#8a6d63] sm:px-6">
+      {peerAskedReset !== null && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#ecece7] bg-[#fff8f4] px-3 py-1 text-[11px] text-[#8a6d63] sm:px-4">
           <span className="font-semibold">{t("canvasResetAsk")}</span>
-          <span className="flex gap-2">
-            <button type="button" onClick={() => void approveReset()} className="rounded-lg bg-[#ff6747] px-2.5 py-1 text-[10px] font-extrabold text-white">{t("canvasResetApprove")}</button>
-            <button type="button" onClick={() => setPeerAskedReset(null)} className="rounded-lg border border-[#e1e3dd] bg-white px-2.5 py-1 text-[10px] font-extrabold text-[#59635f]">{t("canvasDecline")}</button>
+          <span className="flex gap-1.5">
+            <button type="button" onClick={() => void approveReset()} className="rounded-lg bg-[#ff6747] px-2 py-0.5 text-[10px] font-extrabold text-white">{t("canvasResetApprove")}</button>
+            <button type="button" onClick={() => setPeerAskedReset(null)} className="rounded-lg border border-[#e1e3dd] bg-white px-2 py-0.5 text-[10px] font-extrabold text-[#59635f]">{t("canvasDecline")}</button>
           </span>
         </div>
       )}
       {!hidden && (
-        <div className="px-4 pb-3 sm:px-6">
-          <div className="relative mx-auto max-h-[300px] overflow-hidden rounded-xl border border-[#e1e3dd] bg-white" style={{ aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}>
+        <div className="px-3 pb-2 sm:px-4">
+          <div
+            className={`relative mx-auto w-full overflow-hidden rounded-xl border border-[#e1e3dd] bg-white ${expanded ? "max-w-[min(100%,calc(min(46dvh,340px)*16/9))]" : "max-w-[min(100%,calc(min(27dvh,200px)*16/9))]"}`}
+            style={{ aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
+          >
             <canvas
               ref={mineFirst ? ownCanvas : peerCanvas}
               width={CANVAS_WIDTH}

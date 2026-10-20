@@ -166,42 +166,40 @@ html[dir="rtl"] .chat-demo {
   background: #d6d9d2;
 }
 
-.history-sidebar-page,
-.history-sidebar-contained {
-  border-bottom-width: 1px;
-}
-
 .history-sidebar-page {
+  border-bottom-width: 1px;
   max-height: 178px;
 }
 
 .history-sidebar-contained {
-  max-height: 166px;
+  height: 100%;
+  max-height: none;
 }
 
 .chat-shell {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (min-width: 1024px) {
   .history-sidebar-page {
     position: sticky;
     top: 0;
-    height: calc(100vh - 76px);
+    height: calc(100dvh - 76px);
     max-height: none;
     border-bottom-width: 0;
     border-inline-end-width: 1px;
   }
 
   .history-sidebar-contained {
-    height: 100%;
-    max-height: none;
-    border-bottom-width: 0;
     border-inline-end-width: 1px;
-  }
-
-  .chat-shell {
-    grid-template-rows: minmax(0, 1fr);
   }
 }
 
@@ -232,12 +230,6 @@ html[dir="rtl"] .chat-demo {
 }
 
 @media (max-width: 639px) {
-  .chat-shell {
-    min-height: 0;
-    height: calc(100dvh - 92px);
-    border-radius: 20px;
-  }
-
   .chat-demo {
     transform: none;
   }

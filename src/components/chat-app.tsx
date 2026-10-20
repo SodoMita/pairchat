@@ -3,7 +3,7 @@
 import { isValidRoomId, type RoomSnapshot } from "@/lib/chat";
 import { isCanvasEnvelope, type CanvasEnvelope } from "@/lib/canvas";
 import type { EncryptedMessageEnvelope } from "@/lib/chat-events";
-import ChatCanvas from "@/components/chat-canvas";
+import ChatCanvas, { type CanvasUiStatus } from "@/components/chat-canvas";
 import { isClientAdmissionChallenge, solveAdmissionChallenge } from "@/lib/admission-client";
 import {
   createEcdhCredentials,
@@ -41,6 +41,7 @@ import {
   LOCAL_CHATS_KEY,
   markLocalMessageDelivered,
   markLocalMessageRead,
+  removeLocalMessage,
   saveLocalEncryption,
   saveLocalMessage,
   saveLocalRoom,
@@ -78,6 +79,8 @@ import {
   LockKeyhole,
   LogOut,
   MessageCircle,
+  PanelLeft,
+  Pencil,
   Send,
   ShieldCheck,
   Shuffle,
@@ -250,7 +253,7 @@ function Header({
   onToggleSound: () => void;
 }) {
   return (
-    <header className="relative z-30 mx-auto flex h-[76px] w-full max-w-[1500px] items-center justify-between gap-3 px-5 sm:px-8">
+    <header className={`relative z-30 mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3 px-4 sm:px-8 ${inRoom ? "h-14" : "h-[72px]"}`}>
       {inRoom ? (
         <div className="shrink-0" aria-label="Luma"><Brand /></div>
       ) : (
@@ -258,9 +261,9 @@ function Header({
           <Brand />
         </Link>
       )}
-      <div className="flex min-w-0 items-center gap-2.5 sm:gap-5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         {!inRoom && (
-          <nav className="hidden items-center gap-7 text-[12px] font-semibold text-[#66706d] lg:flex">
+          <nav className="hidden items-center gap-6 text-[12px] font-semibold text-[#66706d] lg:flex">
             <a className="transition hover:text-[#1e2927]" href="#how-it-works">{t("howItWorks")}</a>
             <a className="transition hover:text-[#1e2927]" href="#safety-guide">{t("guideNav")}</a>
             <a className="transition hover:text-[#1e2927]" href="#safety">{t("safety")}</a>
@@ -268,7 +271,7 @@ function Header({
               <Bot size={13} className="text-[#ff6747]" />
               {t("agentChannel")}
             </Link>
-            <span className="flex items-center gap-2 rounded-full border border-[#dfe2db] bg-white/70 px-3.5 py-2 text-[11px] text-[#3f4946]">
+            <span className="flex items-center gap-2 rounded-full border border-[#dfe2db] bg-white/70 px-3 py-1.5 text-[11px] text-[#3f4946]">
               <MessageCircle size={13} className="text-[#6c9161]" />
               {t("textOnly")}
             </span>
@@ -664,11 +667,13 @@ function MatchingScreen({
   onToggleSound: () => void;
 }) {
   return (
-    <div className="min-h-screen bg-[#f8f6f0]">
+    <div className="min-h-[100dvh] bg-[#f8f6f0]">
       <Header t={t} language={language} onLanguage={onLanguage} inRoom soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
-      <main className="mx-auto grid min-h-[calc(100vh-76px)] w-full max-w-[1400px] lg:grid-cols-[280px_minmax(0,1fr)]">
-        <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
-        <div className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20 pt-10 lg:pt-0">
+      <main className="mx-auto grid min-h-[calc(100dvh-56px)] w-full max-w-[1400px] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="hidden lg:block">
+          <ConversationSidebar conversations={conversations} currentRoomId={currentRoomId} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} />
+        </div>
+        <div className="grid min-h-[calc(100dvh-56px)] place-items-center px-5 py-6">
           <div className="w-full max-w-[580px] text-center">
             <div className="search-radar mx-auto mb-9 grid h-40 w-40 place-items-center rounded-full">
               <div className="search-radar-inner grid h-20 w-20 place-items-center rounded-full bg-[#ff6747] text-white shadow-[0_14px_35px_rgba(255,103,71,0.28)]"><Users size={31} /></div>
@@ -791,11 +796,16 @@ function ChatScreen({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const canvasInviteRef = useRef<(() => void) | null>(null);
+  const nearBottomRef = useRef(true);
   const [confirmAction, setConfirmAction] = useState<"leave" | "next" | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState(false);
   const [reportSent, setReportSent] = useState(false);
+  const [mobileChatsOpen, setMobileChatsOpen] = useState(false);
+  const [trustNoticeDismissed, setTrustNoticeDismissed] = useState(false);
+  const [canvasUiStatus, setCanvasUiStatus] = useState<CanvasUiStatus>("idle");
   const [partnerUnavailable, setPartnerUnavailable] = useState(false);
   const waiting = room.status === "waiting";
   const ended = room.status === "ended" || !room.participantActive;
@@ -811,8 +821,37 @@ function ChatScreen({
   }, [room.id, waiting, ended, relayReady]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages.length, waiting, ended]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    };
+    const observer = new ResizeObserver(() => {
+      if (nearBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    el.addEventListener("scroll", onScroll, { passive: true });
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
+  }, [draft]);
 
   useEffect(() => {
     if (waiting || ended || !secureReady) return;
@@ -850,22 +889,25 @@ function ChatScreen({
   }, [ended, messages, onReadIncoming, secureReady, waiting]);
 
   useEffect(() => {
-    if (!confirmAction) return;
+    if (!confirmAction && !reportOpen && !mobileChatsOpen) return;
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setConfirmAction(null);
+      if (event.key !== "Escape") return;
+      if (confirmAction) setConfirmAction(null);
+      else if (reportOpen && !reporting) setReportOpen(false);
+      else if (mobileChatsOpen) setMobileChatsOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [confirmAction]);
+  }, [confirmAction, mobileChatsOpen, reportOpen, reporting]);
 
   useEffect(() => {
-    if (waiting || ended || !secureReady || confirmAction || sending) return;
+    if (waiting || ended || !secureReady || confirmAction || reportOpen || mobileChatsOpen || sending) return;
     const frame = window.requestAnimationFrame(() => composerRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
-  }, [confirmAction, ended, secureReady, sending, waiting]);
+  }, [confirmAction, ended, mobileChatsOpen, reportOpen, secureReady, sending, waiting]);
 
   useEffect(() => {
-    if (waiting || ended || !secureReady || confirmAction) return;
+    if (waiting || ended || !secureReady || confirmAction || reportOpen || mobileChatsOpen) return;
     const focusOnTyping = (event: globalThis.KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -879,7 +921,7 @@ function ChatScreen({
       const target = event.target;
       if (
         target instanceof HTMLElement &&
-        target.closest('input, textarea, select, [contenteditable="true"]')
+        target.closest('input, textarea, select, button, a, [role="button"], [role="dialog"], [role="alertdialog"], [contenteditable="true"]')
       ) return;
 
       event.preventDefault();
@@ -889,7 +931,7 @@ function ChatScreen({
 
     window.addEventListener("keydown", focusOnTyping);
     return () => window.removeEventListener("keydown", focusOnTyping);
-  }, [confirmAction, draft, ended, onDraft, secureReady, waiting]);
+  }, [confirmAction, draft, ended, mobileChatsOpen, onDraft, reportOpen, secureReady, waiting]);
 
   const confirmEnd = () => {
     const action = confirmAction;
@@ -913,20 +955,59 @@ function ChatScreen({
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f3ed]">
-      <Header t={t} language={language} onLanguage={onLanguage} inRoom soundEnabled={soundEnabled} onToggleSound={onToggleSound} />
-      <main className="mx-auto max-w-[1400px] px-3 pb-5 sm:px-6 sm:pb-8">
-        <div className="chat-shell grid h-[calc(100vh-102px)] min-h-[610px] overflow-hidden rounded-[26px] border border-[#dedfd8] bg-white shadow-[0_24px_70px_rgba(42,50,47,0.10)] lg:grid-cols-[280px_1fr]">
+    <div className="h-[100dvh] w-full overflow-hidden bg-white">
+      <main className="chat-shell grid h-full w-full overflow-hidden bg-white lg:grid-cols-[260px_minmax(0,1fr)]">
+        <div className="hidden min-h-0 lg:block">
           <ConversationSidebar conversations={conversations} currentRoomId={room.id} language={language} t={t} onOpenChat={onOpenChat} onDeleteHistory={onDeleteHistory} contained />
+        </div>
 
-          <section className="flex min-w-0 flex-col">
-            <div className="flex h-[74px] shrink-0 items-center justify-between border-b border-[#ecece7] px-4 sm:px-6">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54] lg:hidden"><UserRound size={18} /></div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2"><h1 className="truncate text-[14px] font-extrabold text-[#293430]">{room.kind === "private" ? t("privateConversation") : t("yourConversation")}</h1>{room.kind === "private" && <LockKeyhole size={12} className="text-[#84918c]" />}</div>
-                  <p className={`mt-1 flex items-center gap-1.5 text-[10px] font-semibold ${partnerUnavailable && !waiting && !ended ? "text-[#c2412a]" : "text-[#8b9390]"}`} aria-live="polite">
-                    <span className={`h-1.5 w-1.5 rounded-full ${ended ? "bg-[#b7bcb8]" : partnerUnavailable && !waiting ? "bg-[#d8452c]" : waiting || !secureReady ? "animate-pulse bg-[#e5a64f]" : "bg-[#72b05f]"}`} />
+        <section className="flex min-h-0 min-w-0 flex-col bg-white">
+          <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[#ecece7] bg-white px-2.5 sm:px-4">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+              <button
+                type="button"
+                onClick={onPause}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-[#e1e3dd] bg-[#fafaf7] text-[#ff6747] transition hover:bg-[#fff0ea]"
+                aria-label={t("backToChats")}
+                title={t("backToChats")}
+              >
+                <Home size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileChatsOpen(true)}
+                className="relative grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-[#e1e3dd] text-[#59635f] transition hover:bg-[#f7f7f3] lg:hidden"
+                aria-label={t("yourChats")}
+                title={t("yourChats")}
+              >
+                <PanelLeft size={14} />
+                {conversations.length > 0 && (
+                  <span className="absolute -end-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[#ff6747] px-1 text-[9px] font-extrabold text-white">
+                    {Math.min(conversations.length, 9)}
+                  </span>
+                )}
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="truncate text-[13px] font-extrabold leading-tight text-[#293430]">
+                    {room.kind === "private" ? t("privateConversation") : t("yourConversation")}
+                  </h1>
+                  {room.kind === "private" && <LockKeyhole size={11} className="shrink-0 text-[#84918c]" />}
+                  {safetyCode && (
+                    <span
+                      className="hidden items-center gap-1 rounded-md bg-[#edf3e9] px-1.5 py-0.5 font-mono text-[9px] font-bold text-[#587052] xl:inline-flex"
+                      title={t("compareCode")}
+                    >
+                      <ShieldCheck size={11} /> {safetyCode}
+                    </span>
+                  )}
+                </div>
+                <p
+                  className={`flex items-center gap-1.5 truncate text-[10px] font-semibold leading-tight ${partnerUnavailable && !waiting && !ended ? "text-[#c2412a]" : "text-[#8b9390]"}`}
+                  aria-live="polite"
+                >
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ended ? "bg-[#b7bcb8]" : partnerUnavailable && !waiting ? "bg-[#d8452c]" : waiting || !secureReady ? "animate-pulse bg-[#e5a64f]" : "bg-[#72b05f]"}`} />
+                  <span className="truncate">
                     {ended
                       ? t("conversationEnded")
                       : waiting
@@ -934,113 +1015,153 @@ function ChatScreen({
                         : !secureReady
                           ? t("connecting")
                           : partnerUnavailable
-                            ? <span className="truncate">{t("peerNotConnected")}</span>
+                            ? t("peerNotConnected")
                             : partnerTyping
                               ? t("typingIndicator")
                               : t("connected")}
-                  </p>
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+              {canvasEnabled && !waiting && !ended && secureReady && canvasUiStatus === "idle" && (
+                <button
+                  type="button"
+                  onClick={() => canvasInviteRef.current?.()}
+                  aria-label={t("canvasDraw")}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-2 text-[10px] font-extrabold text-[#59635f] transition hover:border-[#f0b4a4] hover:bg-[#fff8f5] hover:text-[#d65b41] sm:px-2.5"
+                >
+                  <Pencil size={13} />
+                  <span className="hidden sm:inline">{t("canvasDraw")}</span>
+                </button>
+              )}
+              {room.kind === "random" && !ended && (
+                <button
+                  type="button"
+                  onClick={() => setReportOpen(true)}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-extrabold transition ${reportSent ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#fff7f4] hover:text-[#d75d44]"}`}
+                  aria-label={reportSent ? t("reportSent") : t("report")}
+                  title={reportSent ? t("reportSent") : t("report")}
+                >
+                  {reportSent ? <Check size={13} /> : <Flag size={13} />}
+                  <span className="hidden 2xl:inline">{reportSent ? t("reportSent") : t("report")}</span>
+                </button>
+              )}
+              {room.kind === "random" && !ended && (
+                <button
+                  type="button"
+                  onClick={onToggleRememberRandom}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-extrabold transition ${rememberRandomHistory ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#f7f7f3]"}`}
+                  aria-label={t("rememberRandom")}
+                  title={t("rememberRandom")}
+                >
+                  <span>{rememberRandomHistory ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}</span>
+                </button>
+              )}
+              {room.kind === "private" && !ended && (
+                <button
+                  type="button"
+                  onClick={onCopy}
+                  aria-label={copied ? t("copied") : t("inviteLink")}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-2.5 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]"
+                >
+                  {copied ? <Check size={13} className="text-[#6ca45e]" /> : <Copy size={13} />}
+                  <span className="hidden sm:inline">{copied ? t("copied") : t("inviteLink")}</span>
+                </button>
+              )}
+              {room.kind === "random" && !waiting && !ended && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction("next")}
+                  aria-label={t("next")}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e1e3dd] px-2 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3] sm:px-2.5"
+                >
+                  <Shuffle size={13} />
+                  <span className="hidden sm:inline">{t("next")}</span>
+                </button>
+              )}
+              <div className="hidden md:block">
+                <LanguageSelector language={language} onLanguage={onLanguage} t={t} />
+              </div>
+              <button
+                type="button"
+                onClick={onToggleSound}
+                aria-pressed={soundEnabled}
+                aria-label={soundEnabled ? t("soundOn") : t("soundOff")}
+                title={soundEnabled ? t("soundOn") : t("soundOff")}
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition ${soundEnabled ? "border-[#d6e5d0] bg-[#edf5e9] text-[#57774e] hover:bg-[#e4efdf]" : "border-[#dfe2db] bg-white text-[#98a09c] hover:bg-[#f7f7f3]"}`}
+              >
+                {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => (ended ? onLeave() : setConfirmAction("leave"))}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#929995] transition hover:bg-[#fff0ec] hover:text-[#e76145]"
+                aria-label={t("leaveChat")}
+                title={t("leaveChat")}
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          </header>
+
+          {canvasEnabled && !waiting && !ended && secureReady && (
+            <ChatCanvas
+              key={room.id}
+              room={room}
+              clientId={clientId}
+              encryption={conversations.find((item) => item.roomId === room.id)?.encryption}
+              queue={canvasQueue}
+              t={t}
+              hideIdleBar
+              inviteRef={canvasInviteRef}
+              onStatusChange={setCanvasUiStatus}
+            />
+          )}
+
+          {!waiting && !ended && partnerUnavailable && (
+            <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#f0c0ae] bg-[#fff1e9] px-3 py-2 text-[11px] font-semibold text-[#a23c22] sm:px-4">
+              <span className="flex items-start gap-2">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[#d8452c]" aria-hidden="true" />
+                <span>{t("peerNotConnected")}</span>
+              </span>
+              {room.kind === "random" && !waiting ? (
+                <button type="button" onClick={() => setConfirmAction("next")} className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-[#ff6747] px-2.5 text-[10px] font-bold text-white hover:bg-[#ee5b3d]"><Shuffle size={12} /> {t("meetNew")}</button>
+              ) : null}
+            </div>
+          )}
+
+          <div ref={scrollRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3.5 py-3 sm:px-6 sm:py-4">
+            {waiting && room.kind === "private" ? (
+              <div className="grid h-full min-h-[260px] place-items-center">
+                <div className="max-w-md text-center">
+                  <div className="invite-pulse mx-auto grid h-16 w-16 place-items-center rounded-full bg-[#fff0ea] text-[#f26749]"><Link2 size={24} /></div>
+                  <h2 className="mt-5 text-[23px] font-extrabold tracking-[-0.04em] text-[#27322f]">{t("roomReady")}</h2>
+                  <p className="mx-auto mt-2.5 max-w-sm text-[13px] leading-6 text-[#7d8582]">{t("roomReadyCopy")}</p>
+                  <button type="button" onClick={onCopy} className="mx-auto mt-5 inline-flex min-h-11 items-center gap-2.5 rounded-xl bg-[#ff6747] px-5 py-2.5 text-[12px] font-extrabold text-white shadow-[0_10px_24px_rgba(255,103,71,0.22)] transition hover:-translate-y-0.5">{copied ? <Check size={15} /> : <Copy size={15} />}{copied ? t("linkCopied") : t("copyInvite")}</button>
+                  <p className="mt-3.5 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-[#a0a6a3]"><LockKeyhole size={11} /> {t("oneGuest")}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {safetyCode && <span className="hidden h-9 items-center gap-2 rounded-xl bg-[#edf3e9] px-3 font-mono text-[9px] font-bold text-[#587052] md:inline-flex" title={t("compareCode")}><ShieldCheck size={13} /> {t("safetyCode")}: {safetyCode}</span>}
-                <button onClick={onPause} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]" aria-label={t("backToChats")}><Home size={14} /><span className="hidden xl:inline">{t("backToChats")}</span></button>
-                {room.kind === "random" && !ended && <button onClick={() => setReportOpen(true)} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${reportSent ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#fff7f4] hover:text-[#d75d44]"}`} title={reportSent ? t("reportSent") : t("report")}>{reportSent ? <Check size={14} /> : <Flag size={14} />}<span className="hidden xl:inline">{reportSent ? t("reportSent") : t("report")}</span></button>}
-                {room.kind === "random" && !ended && <button onClick={onToggleRememberRandom} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${rememberRandomHistory ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#f7f7f3]"}`} title={t("rememberRandom")}><span>{rememberRandomHistory ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}</span><span className="hidden xl:inline">{t("rememberRandom")}</span></button>}
-                {room.kind === "private" && !ended && <button onClick={onCopy} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3] sm:px-4">{copied ? <Check size={14} className="text-[#6ca45e]" /> : <Copy size={14} />}<span className="hidden sm:inline">{copied ? t("copied") : t("inviteLink")}</span></button>}
-                {room.kind === "random" && !waiting && !ended && <button onClick={() => setConfirmAction("next")} aria-label={t("next")} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]"><Shuffle size={14} /><span className="hidden sm:inline">{t("next")}</span></button>}
-                 <button onClick={() => ended ? onLeave() : setConfirmAction("leave")} className="grid h-9 w-9 place-items-center rounded-xl text-[#929995] transition hover:bg-[#fff0ec] hover:text-[#e76145]" aria-label={t("leaveChat")}><LogOut size={16} /></button>
-               </div>
-             </div>
-
-            {canvasEnabled && !waiting && !ended && secureReady && (
-              <ChatCanvas
-                key={room.id}
-                room={room}
-                clientId={clientId}
-                encryption={conversations.find((item) => item.roomId === room.id)?.encryption}
-                queue={canvasQueue}
-                t={t}
-              />
-            )}
-
-            {!waiting && !ended && partnerUnavailable && (
-              <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#f0c0ae] bg-[#fff1e9] px-4 py-3 text-[11px] font-semibold text-[#a23c22] sm:px-6">
-                <span className="flex items-start gap-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[#d8452c]" aria-hidden="true" />
-                  <span>{t("peerNotConnected")}</span>
-                </span>
-                {room.kind === "random" && !waiting ? (
-                  <button type="button" onClick={() => setConfirmAction("next")} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#ff6747] px-3 font-bold text-white hover:bg-[#ee5b3d]"><Shuffle size={13} /> {t("meetNew")}</button>
-                ) : room.kind === "private" && waiting ? (
-                  <button type="button" onClick={onCopy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#ff6747] px-3 font-bold text-white hover:bg-[#ee5b3d]"><Copy size={13} /> {copied ? t("linkCopied") : t("copyInvite")}</button>
-                ) : null}
-              </div>
-            )}
-            <div ref={scrollRef} className="chat-scroll flex-1 overflow-y-auto px-4 py-6 sm:px-8">
-              {waiting && room.kind === "private" ? (
-                <div className="grid h-full min-h-[360px] place-items-center">
-                  <div className="max-w-md text-center">
-                    <div className="invite-pulse mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#f26749]"><Link2 size={28} /></div>
-                    <h2 className="mt-6 text-[25px] font-extrabold tracking-[-0.04em] text-[#27322f]">{t("roomReady")}</h2>
-                    <p className="mx-auto mt-3 max-w-sm text-[13px] leading-6 text-[#7d8582]">{t("roomReadyCopy")}</p>
-                    <button onClick={onCopy} className="mx-auto mt-6 inline-flex min-h-12 items-center gap-2.5 rounded-xl bg-[#ff6747] px-6 py-3 text-[12px] font-extrabold text-white shadow-[0_10px_24px_rgba(255,103,71,0.22)] transition hover:-translate-y-0.5">{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? t("linkCopied") : t("copyInvite")}</button>
-                    <p className="mt-4 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-[#a0a6a3]"><LockKeyhole size={11} /> {t("oneGuest")}</p>
-                  </div>
+            ) : ended ? (
+              <>
+                <div className="mb-4 rounded-2xl border border-[#e4e5df] bg-[#f5f5f1] p-4 text-center">
+                  <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-white text-[#7c8581]"><MessageCircle size={16} /></div>
+                  <h2 className="mt-2 text-[15px] font-extrabold tracking-[-0.03em] text-[#27322f]">{t("endedTitle")}</h2>
+                  <p className="mx-auto mt-1 max-w-md text-[11px] leading-5 text-[#7d8582]">{t("endedCopy")}</p>
                 </div>
-              ) : ended ? (
-                <>
-                  <div className="mb-7 rounded-2xl border border-[#e4e5df] bg-[#f5f5f1] p-5 text-center">
-                    <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-white text-[#7c8581]"><MessageCircle size={18} /></div>
-                    <h2 className="mt-3 text-[17px] font-extrabold tracking-[-0.03em] text-[#27322f]">{t("endedTitle")}</h2>
-                    <p className="mx-auto mt-1.5 max-w-md text-[11px] leading-5 text-[#7d8582]">{t("endedCopy")}</p>
-                  </div>
-                  {messages.length === 0 ? (
-                    <p className="py-10 text-center text-[11px] font-semibold text-[#9ba29f]">{t("noLocalMessages")}</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {messages.map((message) => {
-                        const mine = message.senderPublicId === room.participantPublicId;
-                        return (
-                          <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`} {...(!mine ? { "data-incoming-id": message.id } : {})}>
-                            {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
-                            <div className={`max-w-[78%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
-                              <div className={`whitespace-pre-wrap break-words px-4 py-3 text-start text-[13px] leading-6 ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
-                              <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">
-                                {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
-                                {mine && <MessageReceipt delivery={message.delivery} t={t} />}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  {room.kind === "random" && (
-                    <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-[#f0dfd8] bg-[#fff8f4] px-3.5 py-3 text-start text-[10px] leading-5 text-[#8a6d63]">
-                      <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#d66b51]" />
-                      <span>{t("strangerTrust")} <span className="mt-1 block font-semibold text-[#92796e]">{t("ephemeralRandom")}</span></span>
-                    </div>
-                  )}
-                  <div className="mb-7 flex items-center gap-3 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#b0b5b2]"><span className="h-px flex-1 bg-[#eeeeea]" />{t("conversationStarted")}<span className="h-px flex-1 bg-[#eeeeea]" /></div>
-                  {messages.length === 0 && (
-                    <div className="mx-auto mt-8 max-w-sm text-center">
-                      <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#edf3e9] text-[#729567]"><Sparkles size={21} /></div>
-                      <p className="mt-4 text-[13px] font-extrabold text-[#46514d]">{t("helloTitle")}</p>
-                      <p className="mt-1.5 text-[11px] text-[#969c99]">{t("helloCopy")}</p>
-                    </div>
-                  )}
-                  <div className="space-y-4 pt-4">
+                {messages.length === 0 ? (
+                  <p className="py-8 text-center text-[11px] font-semibold text-[#9ba29f]">{t("noLocalMessages")}</p>
+                ) : (
+                  <div className="space-y-3">
                     {messages.map((message) => {
                       const mine = message.senderPublicId === room.participantPublicId;
                       return (
-                        <div key={message.id} className={`flex items-end gap-2.5 ${mine ? "justify-end" : "justify-start"}`} {...(!mine ? { "data-incoming-id": message.id } : {})}>
-                          {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={13} /></span>}
-                          <div className={`max-w-[78%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
-                            <div className={`whitespace-pre-wrap break-words px-4 py-3 text-start text-[13px] leading-6 ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white shadow-[0_7px_18px_rgba(255,103,71,0.13)]" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
-                            <p className="mt-1.5 px-1 text-[9px] font-semibold text-[#a4aaa7]">
+                        <div key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`} {...(!mine ? { "data-incoming-id": message.id } : {})}>
+                          {!mine && <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={12} /></span>}
+                          <div className={`max-w-[82%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
+                            <div className={`whitespace-pre-wrap break-words px-3.5 py-2.5 text-start text-[13px] leading-relaxed ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
+                            <p className="mt-1 px-1 text-[9px] font-semibold text-[#a4aaa7]">
                               {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
                               {mine && <MessageReceipt delivery={message.delivery} t={t} />}
                             </p>
@@ -1049,20 +1170,128 @@ function ChatScreen({
                       );
                     })}
                   </div>
-                </>
-              )}
-            </div>
+                )}
+              </>
+            ) : (
+              <>
+                {room.kind === "random" && !trustNoticeDismissed && (
+                  <div className="mb-3 flex items-start justify-between gap-2 rounded-xl border border-[#f0dfd8] bg-[#fff8f4] px-3 py-2 text-start text-[10px] leading-4 text-[#8a6d63]">
+                    <span className="flex items-start gap-2">
+                      <ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#d66b51]" />
+                      <span>{t("strangerTrust")} <span className="font-semibold text-[#92796e]">{t("ephemeralRandom")}</span></span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTrustNoticeDismissed(true)}
+                      className="rounded p-0.5 text-[#a1867c] hover:bg-[#f7ebe4] hover:text-[#5d473f]"
+                      aria-label={t("cancel")}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+                <div className="mb-3 flex items-center gap-3 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#b0b5b2]"><span className="h-px flex-1 bg-[#eeeeea]" />{t("conversationStarted")}<span className="h-px flex-1 bg-[#eeeeea]" /></div>
+                {messages.length === 0 && (
+                  <div className="mx-auto my-6 max-w-sm text-center">
+                    <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#edf3e9] text-[#729567]"><Sparkles size={18} /></div>
+                    <p className="mt-2.5 text-[13px] font-extrabold text-[#46514d]">{t("helloTitle")}</p>
+                    <p className="mt-1 text-[11px] text-[#969c99]">{t("helloCopy")}</p>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {messages.map((message) => {
+                    const mine = message.senderPublicId === room.participantPublicId;
+                    return (
+                      <div key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`} {...(!mine ? { "data-incoming-id": message.id } : {})}>
+                        {!mine && <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#dcebd7] text-[#5d7d54]"><UserRound size={12} /></span>}
+                        <div className={`max-w-[82%] sm:max-w-[68%] ${mine ? "text-end" : ""}`}>
+                          <div className={`whitespace-pre-wrap break-words px-3.5 py-2.5 text-start text-[13px] leading-relaxed ${mine ? "rounded-[18px] rounded-br-[5px] bg-[#ff6747] text-white shadow-[0_7px_18px_rgba(255,103,71,0.13)]" : "rounded-[18px] rounded-bl-[5px] bg-[#f0f1ec] text-[#39433f]"}`}>{message.body}</div>
+                          <p className="mt-1 px-1 text-[9px] font-semibold text-[#a4aaa7]">
+                            {new Date(message.createdAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}
+                            {mine && <MessageReceipt delivery={message.delivery} t={t} />}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
 
-            <form onSubmit={onSend} className="shrink-0 border-t border-[#ecece7] bg-white p-3 sm:p-4">
-              <div className={`flex items-end gap-2 rounded-2xl border bg-[#fafaf7] p-2 ps-4 transition focus-within:border-[#f5a18e] focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,103,71,0.08)] ${waiting || ended || !secureReady ? "border-[#e8e9e4] opacity-60" : "border-[#e2e3dd]"}`}>
-                <textarea ref={composerRef} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={onKeyDown} disabled={waiting || ended || !secureReady || sending} maxLength={1200} rows={1} placeholder={waiting ? t("waitingPlaceholder") : ended ? t("endedPlaceholder") : !secureReady ? t("connecting") : t("writeMessage")} className="max-h-28 min-h-10 flex-1 resize-none bg-transparent py-2 text-[13px] leading-6 text-[#313b38] outline-none placeholder:text-[#aab0ad]" />
-                <button type="submit" disabled={!draft.trim() || waiting || ended || !secureReady || sending} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#ff6747] text-white transition hover:bg-[#f45d3e] disabled:bg-[#d9dcd6]" aria-label={t("sendMessage")}>{sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}</button>
-              </div>
-              <div className="mt-2 hidden items-center justify-between px-1 text-[9px] font-semibold text-[#abb0ad] sm:flex"><span>{t("keyboardHint")}</span><span>{draft.length}/1200</span></div>
-            </form>
-          </section>
-        </div>
+          <form onSubmit={onSend} className="shrink-0 border-t border-[#ecece7] bg-white px-2.5 py-2 sm:px-4 sm:py-2.5">
+            <div className={`flex items-end gap-2 rounded-2xl border bg-[#fafaf7] p-1.5 ps-3.5 transition focus-within:border-[#f5a18e] focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,103,71,0.08)] ${waiting || ended || !secureReady ? "border-[#e8e9e4] opacity-60" : "border-[#e2e3dd]"}`}>
+              <textarea
+                ref={composerRef}
+                value={draft}
+                onChange={(event) => onDraft(event.target.value)}
+                onKeyDown={onKeyDown}
+                disabled={waiting || ended || !secureReady || sending}
+                maxLength={1200}
+                rows={1}
+                placeholder={waiting ? t("waitingPlaceholder") : ended ? t("endedPlaceholder") : !secureReady ? t("connecting") : t("writeMessage")}
+                className="max-h-28 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-6 text-[#313b38] outline-none placeholder:text-[#aab0ad]"
+              />
+              {draft.length > 0 && (
+                <span className="pb-2 text-[9px] font-semibold tabular-nums text-[#a4aaa7]">
+                  {draft.length}/1200
+                </span>
+              )}
+              <button
+                type="submit"
+                disabled={!draft.trim() || waiting || ended || !secureReady || sending}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ff6747] text-white transition hover:bg-[#f45d3e] disabled:bg-[#d9dcd6]"
+                aria-label={t("sendMessage")}
+              >
+                {sending ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}
+              </button>
+            </div>
+          </form>
+        </section>
       </main>
+
+      {mobileChatsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex bg-[#17211f]/40 backdrop-blur-[2px] lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("yourChats")}
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setMobileChatsOpen(false);
+          }}
+        >
+          <div className="flex h-full w-[min(300px,84vw)] flex-col bg-[#f4f3ee] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#e1e2dc] px-4 py-2.5">
+              <span className="text-[12px] font-extrabold text-[#293430]">{t("yourChats")}</span>
+              <div className="flex items-center gap-1.5">
+                <LanguageSelector language={language} onLanguage={onLanguage} t={t} />
+                <button
+                  type="button"
+                  onClick={() => setMobileChatsOpen(false)}
+                  className="grid h-8 w-8 place-items-center rounded-lg text-[#65716c] hover:bg-white"
+                  aria-label={t("cancel")}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1">
+              <ConversationSidebar
+                conversations={conversations}
+                currentRoomId={room.id}
+                language={language}
+                t={t}
+                onOpenChat={(conversation) => {
+                  setMobileChatsOpen(false);
+                  onOpenChat(conversation);
+                }}
+                onDeleteHistory={onDeleteHistory}
+                contained
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {notice && (
         <div role="status" aria-live="polite" className="fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-[#27312e] px-4 py-3 text-[11.5px] font-bold text-white shadow-[0_16px_40px_rgba(20,28,25,0.3)]">
@@ -1500,14 +1729,14 @@ export default function ChatApp() {
         }),
       });
       acceptRoom(data.room, participantId, encryption);
-      router.push(`/r/${data.room.id}#k=${secret}`);
+      window.history.pushState(window.history.state, "", `/r/${data.room.id}`);
     } catch {
       setError(t("privateError"));
       setScreen("error");
     } finally {
       setBusy(false);
     }
-  }, [abuseSession, acceptRoom, router, t]);
+  }, [abuseSession, acceptRoom, t]);
 
   useEffect(() => {
     if (!storageReady || !initialRoomId || openedRoomId.current === initialRoomId) return;
@@ -1676,12 +1905,14 @@ export default function ChatApp() {
     };
   }, [acceptRoom, busy, clientId, screen]);
 
+  const matchingRoomId = room?.status === "waiting" ? room.id : undefined;
+
   useEffect(() => {
     // Hold the relay stream open while this tab is queued. It marks the seat as
     // owned by a live search, so a second tab can pair with it rather than with
     // a row left behind by a tab that closed or lost its local key.
-    if (screen !== "matching" || !room || room.status !== "waiting" || !clientId) return;
-    const roomId = room.id;
+    if (screen !== "matching" || !matchingRoomId || !clientId) return;
+    const roomId = matchingRoomId;
     const abort = new AbortController();
     let disposed = false;
     const hold = async () => {
@@ -1709,56 +1940,71 @@ export default function ChatApp() {
       disposed = true;
       abort.abort();
     };
-  }, [clientId, room?.id, room?.status, screen]);
+  }, [clientId, matchingRoomId, screen]);
+
+  const reconcileRoomSnapshot = useCallback(async (roomId: string, accessToken: string): Promise<RoomSnapshot | null> => {
+    try {
+      const data = await requestJson<{ room: RoomSnapshot }>(
+        `/api/rooms/${roomId}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(8000),
+        },
+      );
+      setRoom((current) =>
+        current?.id === roomId && !sameRoomConnection(current, data.room)
+          ? data.room
+          : current,
+      );
+      setConversations(saveLocalRoom(data.room, accessToken));
+      return data.room;
+    } catch (error) {
+      if (error instanceof ChatRequestError && [403, 404, 410].includes(error.status)) {
+        setConversations(setLocalRoomStatus(roomId, "ended"));
+        setRoom((current) =>
+          current?.id === roomId
+            ? { ...current, status: "ended", participantActive: false }
+            : current,
+        );
+      }
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId || room.status === "ended") return;
     const roomId = room.id;
     let disposed = false;
-    // The relay handles presence; this poll reconciles room status and keys.
     const refresh = async () => {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const data = await requestJson<{ room: RoomSnapshot }>(
-          `/api/rooms/${roomId}`,
-          {
-            headers: { Authorization: `Bearer ${clientId}` },
-            signal: AbortSignal.timeout(8000),
-          },
-        );
-        if (disposed) return;
-        setRoom((current) => current?.id === roomId && !sameRoomConnection(current, data.room)
-          ? data.room
-          : current);
-        setConversations(saveLocalRoom(data.room, clientId));
-      } catch (error) {
-        if (disposed) return;
-        if (error instanceof ChatRequestError && [403, 404, 410].includes(error.status)) {
-          // The server may have removed an ended or expired room. Do not show
-          // a stale local card as an eternally 'Connecting…' live chat.
-          setConversations(setLocalRoomStatus(roomId, "ended"));
-          setRoom((current) => current?.id === roomId
-            ? { ...current, status: "ended", participantActive: false }
-            : current);
-        }
-      }
+      if (disposed || document.visibilityState !== "visible") return;
+      await reconcileRoomSnapshot(roomId, clientId);
     };
     void refresh();
-    const poll = window.setInterval(() => void refresh(), 20_000);
+    const intervalMs = room.status === "waiting" ? 2_500 : 20_000;
+    const poll = window.setInterval(() => void refresh(), intervalMs);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       disposed = true;
       window.clearInterval(poll);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [clientId, room, screen]);
+  }, [clientId, reconcileRoomSnapshot, room, screen]);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId || room.status === "ended") return;
-    const roomSnapshot = room;
+    let activeSnapshot = room;
     const roomId = room.id;
     const abort = new AbortController();
     setRelayReady(false);
+
+    const ensurePeerSnapshot = async () => {
+      if (activeSnapshot.partnerSigningKey && activeSnapshot.partnerPublicId && activeSnapshot.status === "active") {
+        return activeSnapshot;
+      }
+      const updated = await reconcileRoomSnapshot(roomId, clientId);
+      if (updated) activeSnapshot = updated;
+      return activeSnapshot;
+    };
 
     const receiveMessage = async (data: string) => {
       try {
@@ -1772,21 +2018,24 @@ export default function ChatApp() {
           typeof envelope.senderPublicId !== "string" ||
           typeof envelope.createdAt !== "string"
         ) return;
+        const snapshot = envelope.senderPublicId === activeSnapshot.participantPublicId
+          ? activeSnapshot
+          : await ensurePeerSnapshot();
         const conversation = loadLocalConversations().find(
           (item) => item.roomId === roomId,
         );
-        const signatureKey = envelope.senderPublicId === roomSnapshot.participantPublicId
+        const signatureKey = envelope.senderPublicId === snapshot.participantPublicId
           ? serializeSigningKey(conversation?.encryption)
-          : roomSnapshot.partnerSigningKey;
+          : snapshot.partnerSigningKey;
         const signatureValid = await verifyEnvelopeSignature(
           signatureKey,
           roomId,
           envelope,
         );
         if (!signatureValid) return;
-        const key = await getRoomCryptoKey(conversation?.encryption, roomSnapshot);
+        const key = await getRoomCryptoKey(conversation?.encryption, snapshot);
         const body = await decryptMessage(key, roomId, envelope);
-        const fromPartner = envelope.senderPublicId !== roomSnapshot.participantPublicId;
+        const fromPartner = envelope.senderPublicId !== snapshot.participantPublicId;
         storeMessage(roomId, {
           id: envelope.id,
           body,
@@ -1799,13 +2048,13 @@ export default function ChatApp() {
         }
 
         // Acknowledge only after sender-signature verification and AEAD decryption succeed.
-        if (envelope.senderPublicId !== roomSnapshot.participantPublicId) {
+        if (envelope.senderPublicId !== snapshot.participantPublicId) {
           const receivedAt = new Date().toISOString();
           const ackSignature = await signDeliveryAck(
             conversation?.encryption,
             roomId,
             envelope.id,
-            roomSnapshot.participantPublicId,
+            snapshot.participantPublicId,
             receivedAt,
           );
           await requestJson(`/api/rooms/${roomId}/ack`, {
@@ -1813,7 +2062,7 @@ export default function ChatApp() {
             headers: { Authorization: `Bearer ${clientId}` },
             body: JSON.stringify({
               messageId: envelope.id,
-              recipientPublicId: roomSnapshot.participantPublicId,
+              recipientPublicId: snapshot.participantPublicId,
               receivedAt,
               signature: ackSignature,
             }),
@@ -1837,7 +2086,11 @@ export default function ChatApp() {
       if (eventType === "peer") {
         try {
           const peer = JSON.parse(payload) as { connected?: boolean };
-          setRelayReady(peer.connected === true);
+          const connected = peer.connected === true;
+          setRelayReady(connected);
+          if (connected && (activeSnapshot.status === "waiting" || !activeSnapshot.partnerSigningKey)) {
+            void ensurePeerSnapshot();
+          }
         } catch {
           setRelayReady(false);
         }
@@ -1845,7 +2098,7 @@ export default function ChatApp() {
       if (eventType === "typing") {
         try {
           const typing = JSON.parse(payload) as { senderPublicId?: string; active?: boolean };
-          if (typing.senderPublicId && typing.senderPublicId !== roomSnapshot.participantPublicId) {
+            if (typing.senderPublicId && typing.senderPublicId !== activeSnapshot.participantPublicId) {
             if (typing.active === true) markPartnerTyping();
             else setPartnerTyping(false);
           }
@@ -1875,6 +2128,7 @@ export default function ChatApp() {
       if (eventType === "read") {
         void (async () => {
           try {
+            const snapshot = await ensurePeerSnapshot();
             const receipt = JSON.parse(payload) as {
               messageId?: string;
               recipientPublicId?: string;
@@ -1883,12 +2137,12 @@ export default function ChatApp() {
             };
             if (
               typeof receipt.messageId !== "string" ||
-              receipt.recipientPublicId !== roomSnapshot.partnerPublicId ||
+              receipt.recipientPublicId !== snapshot.partnerPublicId ||
               typeof receipt.readAt !== "string" ||
               typeof receipt.signature !== "string"
             ) return;
             const signatureValid = await verifyReadAck(
-              roomSnapshot.partnerSigningKey,
+              snapshot.partnerSigningKey,
               roomId,
               receipt.messageId,
               receipt.recipientPublicId,
@@ -1907,6 +2161,7 @@ export default function ChatApp() {
       if (eventType === "ack") {
         void (async () => {
           try {
+            const snapshot = await ensurePeerSnapshot();
             const ack = JSON.parse(payload) as {
               messageId?: string;
               recipientPublicId?: string;
@@ -1915,12 +2170,12 @@ export default function ChatApp() {
             };
             if (
               typeof ack.messageId !== "string" ||
-              ack.recipientPublicId !== roomSnapshot.partnerPublicId ||
+              ack.recipientPublicId !== snapshot.partnerPublicId ||
               typeof ack.receivedAt !== "string" ||
               typeof ack.signature !== "string"
             ) return;
             const signatureValid = await verifyDeliveryAck(
-              roomSnapshot.partnerSigningKey,
+              snapshot.partnerSigningKey,
               roomId,
               ack.messageId,
               ack.recipientPublicId,
@@ -2015,7 +2270,7 @@ export default function ChatApp() {
       setRelayReady(false);
       abort.abort();
     };
-  }, [clientId, markPartnerTyping, room, screen, storeMessage]);
+  }, [clientId, markPartnerTyping, reconcileRoomSnapshot, room, screen, storeMessage]);
 
   const pauseRoom = useCallback(() => {
     openedRoomId.current = null;
@@ -2118,6 +2373,7 @@ export default function ChatApp() {
     if (!body || !room || !clientId || !safetyCode || sending) return;
     setSending(true);
     setDraft("");
+    let pendingMessageId: string | null = null;
     try {
       const conversation = loadLocalConversations().find(
         (item) => item.roomId === room.id,
@@ -2126,11 +2382,7 @@ export default function ChatApp() {
       const encrypted = await encryptMessage(key, room.id, room.participantPublicId, body);
       const signature = await signEnvelope(conversation?.encryption, room.id, encrypted);
       const envelope: EncryptedMessageEnvelope = { ...encrypted, signature };
-      await requestJson<{ envelope: EncryptedMessageEnvelope }>(`/api/rooms/${room.id}/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${clientId}` },
-        body: JSON.stringify({ envelope }),
-      });
+      pendingMessageId = envelope.id;
       storeMessage(room.id, {
         id: envelope.id,
         body,
@@ -2138,10 +2390,20 @@ export default function ChatApp() {
         createdAt: envelope.createdAt,
         delivery: "sent",
       });
+      await requestJson<{ envelope: EncryptedMessageEnvelope }>(`/api/rooms/${room.id}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${clientId}` },
+        body: JSON.stringify({ envelope }),
+      });
       playSound("sent");
       sendTypingSignal(false);
       setNotice("");
     } catch {
+      if (pendingMessageId) {
+        const rolledBack = removeLocalMessage(room.id, pendingMessageId);
+        setConversations(rolledBack);
+        setMessages(rolledBack.find((item) => item.roomId === room.id)?.messages ?? []);
+      }
       setDraft(body);
       setError(t("sendError"));
       setNotice(t("sendError"));
@@ -2149,7 +2411,7 @@ export default function ChatApp() {
     } finally {
       setSending(false);
     }
-  }, [clientId, draft, relayReady, room, safetyCode, sendTypingSignal, sending, storeMessage, t]);
+  }, [clientId, draft, room, safetyCode, sendTypingSignal, sending, storeMessage, t]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -2285,7 +2547,7 @@ export default function ChatApp() {
   }
 
   if (screen === "error") {
-    return <div className="min-h-screen bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} soundEnabled={soundOn} onToggleSound={toggleSound} /><main className="grid min-h-[calc(100vh-76px)] place-items-center px-5 pb-20"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
+    return <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f8f6f0]" dir={getLanguageDirection(language)}><Header t={t} language={language} onLanguage={changeLanguage} inRoom soundEnabled={soundOn} onToggleSound={toggleSound} /><main className="grid flex-1 place-items-center overflow-y-auto px-5 py-10"><div className="max-w-md text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#fff0ea] text-[#ef6849]"><X size={28} /></div><h1 className="mt-6 text-[32px] font-extrabold tracking-[-0.05em] text-[#27322f]">{t("errorTitle")}</h1><p className="mt-3 text-[14px] leading-6 text-[#7d8582]">{error || t("errorRetry")}</p><button onClick={() => { setError(""); setRoom(null); setClientId(""); setScreen("home"); router.push("/"); }} className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#ff6747] px-6 py-2 text-[12px] font-extrabold text-white">{t("backToLuma")} <ArrowRight size={15} className="rtl:rotate-180" /></button></div></main></div>;
   }
 
   if (screen === "matching") return <MatchingScreen onCancel={() => void cancelSearch()} onPrivate={() => void privateFromQueue()} starting={busy} matchNotice={homeNotice} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;

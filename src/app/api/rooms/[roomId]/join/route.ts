@@ -6,6 +6,7 @@ import {
   isValidPrivateCommitment,
   isValidRoomId,
 } from "@/lib/chat";
+import { notifyRoomJoined } from "@/lib/chat-events";
 import { getRoomSnapshot } from "@/lib/chat-server";
 import { allowRequest } from "@/lib/rate-limit";
 import { bearerCredential, isTrustedJsonMutation, requestClientAddress, readLimitedJson } from "@/lib/request-security";
@@ -129,6 +130,7 @@ export async function POST(
     return NextResponse.json({ error: "This private chat is already full." }, { status: 409 });
   }
 
+  notifyRoomJoined(roomId);
   const room = await getRoomSnapshot(roomId, clientId, true);
   return NextResponse.json({ room });
 }

@@ -232,6 +232,19 @@ export function deleteLocalConversation(roomId: string): LocalConversation[] {
   );
 }
 
+export function removeLocalMessage(roomId: string, messageId: string): LocalConversation[] {
+  return writeLocalConversations(
+    loadLocalConversations().map((conversation) =>
+      conversation.roomId !== roomId
+        ? conversation
+        : {
+            ...conversation,
+            messages: conversation.messages.filter((message) => message.id !== messageId),
+          },
+    ),
+  );
+}
+
 export function markLocalMessageDelivered(
   roomId: string,
   messageId: string,
