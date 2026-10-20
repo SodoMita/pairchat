@@ -21,7 +21,12 @@ export async function POST(
   if (!isTrustedJsonMutation(request)) {
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
-  if (!allowRequest(`room-join:${requestClientAddress(request)}`, 30, 60_000)) {
+  // Scope the budget to this visitor, not to the address: behind a proxy that
+  // omits the client address every visitor would share one small bucket.
+  const joinIdentity = hashAccessCredential(
+    bearerCredential(request) ?? requestClientAddress(request),
+  );
+  if (!allowRequest(`room-join:${joinIdentity}`, 30, 60_000)) {
     return NextResponse.json({ error: "Too many join requests." }, { status: 429 });
   }
   const { roomId } = await context.params;

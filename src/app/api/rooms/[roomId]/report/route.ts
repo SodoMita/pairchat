@@ -36,7 +36,10 @@ export async function POST(
   if (!isTrustedJsonMutation(request)) {
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
-  if (!allowRequest(`report:${requestClientAddress(request)}`, 10, 60 * 60_000)) {
+  const reportIdentity = hashAccessCredential(
+    bearerCredential(request) ?? requestClientAddress(request),
+  );
+  if (!allowRequest(`report:${reportIdentity}`, 10, 60 * 60_000)) {
     return NextResponse.json({ error: "Too many safety signals." }, { status: 429 });
   }
 

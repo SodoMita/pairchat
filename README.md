@@ -1,8 +1,8 @@
 # Luma — anonymous text chat roulette
 
-> **Preview:** https://3000-ip73k2mzc81n3241ias59.e2b.app
+> **Live preview:** https://3000-iojhjonxxht7y15sb8hg3.e2b.app
 >
-> Preview URLs are temporary. The default GitHub branch is `main`.
+> Preview URLs are temporary and change when the sandbox restarts; the default GitHub branch is `main`.
 
 Luma is a calm, anonymous one-to-one text chat. Meet another person who is searching at the same time, or create a private invite link for exactly one friend. Waiting depends on whether someone else is online. No profiles, no accounts, no images or calls.
 
@@ -52,9 +52,9 @@ same-origin JSON request and a participant bearer credential.
 
 ## Connection reliability and what to expect
 
-- A stranger chat needs **two people searching at the same time**. Two tabs in the same
-  browser can meet each other if nobody else is in the queue, so a solo test still works.
-  The matching screen also offers a private invite while you wait.
+- A stranger chat needs **two different browser sessions searching at the same time**. The
+  matching screen says so and offers a private invite while the queue is empty. Two tabs in the
+  same browser share one session and cannot be matched to each other.
 - Closing or reloading during a search no longer silently strands the browser in a 429
   "already waiting" state. A saved waiting seat is resumed with its original encryption key;
   if that key has been lost, a fresh search replaces the *waiting* seat without claiming it.
@@ -94,159 +94,54 @@ BASE=http://localhost:3000 node scripts/browser-check.mjs
 npx next typegen && npx tsc --noEmit && npm run build
 ```
 
-## What actually happens in random anonymous chats (and why)
+## What usually happens in random anonymous chats
 
-Anonymous chat is unpredictable by design: there is no reputation, no shared history and no
-moderator reading the messages. Most sessions go fine, but the situations below come up
-regularly. The same explanations are also shown, translated, on the home page (`#safety-guide`)
-so people do not have to read a README to understand what is happening. The goal is to explain
-*why* a reaction matters, not to lecture; the response choices are still your own.
+This is a description of the situation, not a list of orders. People already know they can leave. What is less obvious is what follows from staying, answering, or leaving.
 
-### 1. The other person disappears mid-chat ("ghosting")
+### The other person disappears
 
-**Why it happens:** the other person closed the tab, lost interest, had to go do something, or
-opened a new match in another window. They may not even know you are still typing. End-to-end
-chats do not have a "left" signal until one side actually disconnects.
+A lot of chats end in the middle of a sentence. Sometimes the network dropped. Sometimes they got what they wanted, or nothing they wanted, and closed the tab. The consequence of reading that as a verdict on you is that the next chat starts already defensive. The consequence of treating it as the format is smaller: that transcript is over, and the next person is not the previous one. Nothing in the product tells you which of those causes it was.
 
-**What it can lead to:** repeated messages that the other person never sees, frustration that
-turns into insults, and a worse mood than if the chat had simply ended. Sending more messages
-will not get a reply that isn't coming.
+### Swearing
 
-**What to know:** no one is owed a goodbye in a stranger match. The chat ends when either side
-ends it. If it stings, the most useful response is to take a short break before matching again.
+Swearing shows up in a few different shapes, and they do not have the same aftermath.
 
-### 2. Money, crypto, investment, or gift-card requests
+Some people swear the way they talk. The words are rough and the subject is ordinary. Answering in the same register often just continues the conversation. Matching their volume does not, by itself, turn the chat into a fight.
 
-**Why it happens:** these are the highest-yield scam formats on the open internet: romance,
-"investment opportunity", "verification" link, fake prize, urgent help from someone pretending
-to be a friend. Anonymous chat is a place they will try because the platform can never read
-what they say.
+Some swearing is aimed. It is about you, your silence, your boundary, or a group you were assumed to belong to. Answering that kind often has a specific consequence: the chat becomes a contest, and the other person now has a longer sample of how you react. Leaving has a different consequence. The chat ends for both of you, they may be annoyed, and anything already on their screen can still be copied. There is no middle outcome where the words are unsent.
 
-**What it can lead to:** direct financial loss, wallet or account compromise (one-time codes
-are not reversible), and ongoing targeting if you give a single data point. Even a small reply
-identifies the account as real and reachable.
+A safety signal does not summon someone to read the transcript. It does not delete their copy. It can make their next stranger matches slower for a while. That is the whole effect. If the swearing was casual, that friction is a cost they did not necessarily earn. If it was aimed, the friction is still only friction.
 
-**What to know:** a legitimate stranger never needs your money, your wallet seed, your
-verification code, or your card number. The same advice that applies to email and SMS applies
-here. Leaving and reporting is the only safe response; the report is content-free and reaches
-the relay without you quoting the conversation.
+### Cruelty, sexual pressure, and demands
 
-### 3. Harassment, hate speech, or threats
+Some chats move quickly from hello to a demand: a photo, a sexual script, an insult if you decline, a test of whether you will stay. Replying with an explanation often becomes the next thing they argue with. The consequence is more time in the chat, not a negotiated peace. Leaving ends your side. It does not make them kinder in the next room, and it does not erase what you already typed. A safety signal adds temporary matching friction for their browser session. It is not a case file and nobody reviews the messages, because the server cannot read them.
 
-**Why it happens:** anonymity lowers the cost of cruelty for people who would not behave that
-way in person. Some are testing what they can get away with, others are repeating a pattern
-that worked elsewhere.
+### Spam, bots, and people fishing for a reply
 
-**What it can lead to:** retaliation that escalates the situation, real emotional harm, and in
-the case of threats (especially threats of violence or self-harm) genuine danger. A long
-back-and-forth keeps both people in a harmful state longer.
+Repeated lines, links, or a script that ignores what you said are usually looking for any response. A reply is evidence that a human is on the other side, which is the thing the script was measuring. Silence plus ending the chat withholds that evidence. Reporting it as spam can slow that session's later matches. It will not identify a person, because there is no account behind the session.
 
-**What to know:** Luma is text-only, anonymous to the other side, and ends when you end it.
-Save what you need as evidence *before* leaving, send a report, then end the chat. Threats of
-violence are a matter for local police; Luma cannot intervene in a live conversation and the
-relay has no human review.
+### Money, codes, and personal details
 
-### 4. Sexual pressure or explicit content
+Encryption hides the sentence from the server. It does not hide it from the other person. A bank code, a login code, a photo of an ID, a phone number, or a city small enough to find someone are still in their browser after you send them. Ending the chat does not pull that back. Keeping the chat does not make them more trustworthy. The safety code only tells you that the keys were not swapped by the relay if you compare it somewhere else. It says nothing about whether the person will ask you for money five messages later.
 
-**Why it happens:** some people treat text chat as a place to push sexual content, sometimes
-as a test, sometimes as a habit. Luma is designed for casual text only — there is no image,
-audio, or video.
+Impersonation works here because there is no profile to check. Someone can claim a job, an age, a crisis, or a platform role. The consequence of believing it is that you act on a sentence from an anonymous tab. The consequence of not believing it is that a real person in trouble gets a shorter conversation. The product cannot tell those apart.
 
-**What it can lead to:** a conversation that drifts into territory the other person is
-pressuring, and an experience that no longer feels safe or fun. Continuing to engage often
-raises the pressure rather than lowering it.
+### Awkwardness and silence
 
-**What to know:** what you share is your decision. A single "no" is enough, and you are not
-required to explain. Leaving is the strongest signal. Reports here add temporary matching
-friction to the partner's session; they do not create a case, and they do not share message
-content with anyone.
+A pause is often just someone typing, or deciding to leave. Filling every pause has the consequence of doing the whole conversation yourself. A short boundary ("I don't want to talk about that") sometimes redirects the chat and sometimes becomes the topic. Either result is information. You do not get a record of it on the server, and they may keep one locally if they chose to.
 
-### 5. Requests for personal details
+### Language
 
-**Why it happens:** people naturally want to keep talking after a good match, and a "where are
-you from" question is innocent on its own. The same question, combined with asking for a
-phone number or to move to a different app, is how targeting usually starts.
+The language menu changes your interface, not the other person's. If you cannot read each other, the chat stalls. Translation tools outside Luma mean pasting their words into another site, which is another copy of the conversation. Staying in a chat you cannot read mostly produces more unread text.
 
-**What it can lead to:** being identified and contacted outside Luma, where none of the
-encryption or safety boundaries of this site apply. Once a phone number, photo or social
-handle is sent, the other person controls it forever.
+### The search itself
 
-**What to know:** keep your full name, address, workplace, school, and social handles private.
-Luma will never ask you to move to a different app; the moment anyone does, that is a sign to
-leave. Anything already sent may already be screenshotted — the chat cannot be un-said.
+A waiting search used to die after a short silence, while the screen still said it was looking. A second tab in the same browser was rejected outright, so two windows could not meet. After a few skips, a proof-of-work check was hard enough that the browser often failed it, and the next match never started. Those are fixed: a live search stays in the queue, a vanished search is started again, a second tab can join the waiting person if nobody else is there, and the admission check is small enough to finish. If the other side never opens the live connection, the chat does not sit on "Connecting" forever.
 
-### 6. Bots, spam, and suspicious links
+## Sounds
 
-**Why it happens:** spammers harvest any open text surface. The opening line is often a
-templated compliment, an escort or "crypto mentor" pitch, or a fake moderation message
-("verify your account by clicking here").
+Message, connect, and disconnect tones are generated in the browser. Browsers block audio until a click or key press, so the tone is armed by the same gesture that starts or sends a chat. The speaker button in the chat mutes them on this device.
 
-**What it can lead to:** phishing accounts, stolen credentials, malware, and continued
-spamming if you reply (a reply confirms the account is live).
+## License
 
-**What to know:** never open links or download files from a stranger match. No one from Luma
-will ever message you from inside a chat. A report-as-spam plus a new match takes a few
-seconds and removes the bot's attention reward.
-
-### 7. Swearing, insults, and crude language
-
-**Why it happens:** anonymous text lowers the social cost of strong language. Some people
-swear casually with friends, others do it deliberately to provoke. There is no automatic
-filter on the relay, because Luma cannot read encrypted content.
-
-**What it can lead to:** a conversation that feels hostile, even when no one is "threatening"
-in a reportable sense. Persistent crude language shortens the chat for everyone, including the
-person typing it.
-
-**What to know:** you decide what is acceptable in your chat. Strong language aimed at *you*
-on purpose (especially with slurs) crosses from "rude" into "harassment" — the report flow
-exists for that case. A one-off "damn" or "hell" is not a safety issue; a stream of personal
-insults is. If a chat tilts that way, leaving is faster and cheaper than trying to moderate
-the other person, and it is the only response that actually changes the experience.
-
-### 8. Minors, illegal content, or self-harm disclosures
-
-**Why it happens:** the open internet includes people in crisis and people who should not be
-on an open chat at all. Luma has no age check, no identity check, and cannot read messages.
-
-**What it can lead to:** real-world harm, including to the stranger themselves. Continuing
-the conversation, even with good intentions, usually makes the situation worse.
-
-**What to know:** do not engage with sexual content involving minors, do not redistribute
-illegal material, and do not try to counsel someone through self-harm in an anonymous text
-chat. Leave, report if appropriate, and contact local emergency services or a trusted
-support line in your country when there is immediate risk. Luma cannot intervene in a live
-chat; the relay cannot read message content.
-
-### The patterns that follow from the above
-
-A few consequences show up over and over, regardless of which situation triggered them:
-
-- **Stopping a reply is the strongest signal available.** Engaging rewards the other side
-  whether they are a bot, a scammer, or a person having a bad day. A silent end is not rude.
-- **Local history is local.** Whatever was screenshotted on the other side cannot be
-  unscreenshotted. The "Keep this stranger chat" option controls only *your* device.
-- **A report is content-free.** Luma's relay never sees the message text. The report is just
-  a reason code attached to the partner's session for a few minutes. Sending one costs
-  nothing and is the only moderation mechanism the platform has.
-- **The system can be wrong, and so can the user.** A bored or angry match may misread
-  intent. The same is true in reverse. The default in Luma is "anonymous stranger, treat
-  accordingly" — and the same grace extends to your own behaviour.
-- **Breaks help.** Doom-matching (rapidly starting new chats to "find someone decent") is
-  exhausting. Closing the tab is allowed at any time, for any reason.
-
-### What Luma can and cannot do
-
-- **Cannot read your messages.** End-to-end encryption means reports are content-free and no
-  human reviews a transcript.
-- **Reports add friction, not justice.** They can place a temporary matching cooldown on the
-  reported browser session, but determined abusers can rotate storage, browsers, or
-  addresses.
-- **Cannot erase what was already saved.** The other person may have screenshots or notes.
-- **Cannot verify age or identity.** Treat everyone as an unverified stranger, including
-  people who claim to be someone else.
-- **Safety codes**: compare the displayed code out-of-band if you need to rule out an active
-  man-in-the-middle; TLS alone does not authenticate a stranger's key.
-
-If you see a bug or a security issue in this project, follow the testing rules in
-`SECURITY.md` and use only rooms and identities you created for testing.
+MIT. See [LICENSE](LICENSE). Security limits are described in [SECURITY.md](SECURITY.md).

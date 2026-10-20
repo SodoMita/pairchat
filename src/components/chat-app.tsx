@@ -453,31 +453,17 @@ function HomeScreen({
     [LockKeyhole, t("privateTitle"), t("privateCopy")],
     [Link2, t("linkTitle"), t("linkCopy")],
   ] as const;
-  type GuideTopic = {
-    icon: typeof Users;
-    title: string;
-    why: string;
-    consequence: string;
-    reasoning: string;
-    topicKey: string;
-  };
-  const buildGuideTopic = (icon: typeof Users, title: string, key: string): GuideTopic => ({
-    icon,
-    title,
-    why: t(`guide${key}Why` as TranslationKey),
-    consequence: t(`guide${key}Consequence` as TranslationKey),
-    reasoning: t(`guide${key}Reasoning` as TranslationKey),
-    topicKey: key,
-  });
-  const allGuideTopics: GuideTopic[] = [
-    buildGuideTopic(Users, t("guideGhostingTitle"), "Ghosting"),
-    buildGuideTopic(Wallet, t("guideScamTitle"), "Scam"),
-    buildGuideTopic(AlertTriangle, t("guideHarassTitle"), "Harass"),
-    buildGuideTopic(Ban, t("guideSexualTitle"), "Sexual"),
-    buildGuideTopic(LockKeyhole, t("guidePrivacyTitle"), "Privacy"),
-    buildGuideTopic(Link2, t("guideSpamTitle"), "Spam"),
-    buildGuideTopic(MessageCircle, t("guideSwearTitle"), "Swear"),
-    buildGuideTopic(Heart, t("guideMinorTitle"), "Minor"),
+  // The common-problems list. Plain reading material: what tends to happen in
+  // random anonymous chat, and what follows from it.
+  const allGuideTopics: { icon: typeof Users; title: string; copy: string }[] = [
+    { icon: Users, title: t("guideVanishTitle"), copy: t("guideVanishCopy") },
+    { icon: MessageCircle, title: t("guideSwearingTitle"), copy: t("guideSwearingCopy") },
+    { icon: AlertTriangle, title: t("guideDemandsTitle"), copy: t("guideDemandsCopy") },
+    { icon: Link2, title: t("guideFishingTitle"), copy: t("guideFishingCopy") },
+    { icon: Wallet, title: t("guideSecretsTitle"), copy: t("guideSecretsCopy") },
+    { icon: Heart, title: t("guideSilenceTitle"), copy: t("guideSilenceCopy") },
+    { icon: Globe2, title: t("guideLanguageTitle"), copy: t("guideLanguageCopy") },
+    { icon: Shuffle, title: t("guideSearchTitle"), copy: t("guideSearchCopy") },
   ];
 
   const patterns = [
@@ -556,16 +542,23 @@ function HomeScreen({
             <p className="mt-4 text-[15px] leading-7 text-[#68716e]">{t("guideIntro")}</p>
           </div>
 
-          <ol className="mt-9 max-w-[760px] list-decimal space-y-8 ps-6 text-[#3a4541] marker:font-extrabold marker:text-[#c96a54]">
-            {allGuideTopics.map((topic) => (
-              <li key={topic.topicKey} className="ps-2">
-                <h3 className="text-[17px] font-extrabold leading-6 text-[#2b3733]">{topic.title}</h3>
-                <p className="mt-3 text-[14px] leading-7 text-[#5a6661]"><strong className="font-extrabold text-[#27322f]">{t("guideWhyLabel")}: </strong>{topic.why}</p>
-                <p className="mt-2 text-[14px] leading-7 text-[#5a6661]"><strong className="font-extrabold text-[#27322f]">{t("guideConsequenceLabel")}: </strong>{topic.consequence}</p>
-                <p className="mt-2 text-[14px] leading-7 text-[#5a6661]"><strong className="font-extrabold text-[#27322f]">{t("guideReasoningLabel")}: </strong>{topic.reasoning}</p>
-              </li>
-            ))}
-          </ol>
+          <div className="mx-auto mt-9 max-w-[860px] space-y-5">
+            {allGuideTopics.map((topic, index) => {
+              const ItemIcon = topic.icon;
+              return (
+                <article key={topic.title} className="rounded-2xl border border-[#e7e6df] bg-white/85 p-6 sm:p-8">
+                  <h3 className="flex items-center gap-3 text-[16px] font-extrabold leading-6 text-[#23302c]">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff0ea] text-[#e0664b]" aria-hidden="true"><ItemIcon size={17} /></span>
+                    <span className="min-w-0">
+                      <span className="me-2 text-[10px] font-extrabold tabular-nums tracking-widest text-[#a5aba6]">{String(index + 1).padStart(2, "0")}</span>
+                      {topic.title}
+                    </span>
+                  </h3>
+                  <p className="mt-4 border-t border-[#eceade] pt-4 text-[13px] leading-[1.85] text-[#5c6a64]">{topic.copy}</p>
+                </article>
+              );
+            })}
+          </div>
 
           <div className="mt-8 overflow-hidden rounded-[28px] border border-[#e4e6de] bg-[#f0f3ec]">
             <div className="p-6 sm:p-8">
@@ -1492,6 +1485,41 @@ export default function ChatApp() {
       document.removeEventListener("visibilitychange", pollQueue);
     };
   }, [acceptRoom, busy, clientId, screen]);
+
+  useEffect(() => {
+    // Hold the relay stream open while this tab is queued. It marks the seat as
+    // owned by a live search, so a second tab can pair with it rather than with
+    // a row left behind by a tab that closed or lost its local key.
+    if (screen !== "matching" || !room || room.status !== "waiting" || !clientId) return;
+    const roomId = room.id;
+    const abort = new AbortController();
+    let disposed = false;
+    const hold = async () => {
+      while (!abort.signal.aborted) {
+        try {
+          const response = await fetch(`/api/rooms/${roomId}/events`, {
+            headers: { Accept: "text/event-stream", Authorization: `Bearer ${clientId}` },
+            cache: "no-store",
+            signal: abort.signal,
+          });
+          if (!response.ok || !response.body) throw new Error("Encrypted relay unavailable");
+          const reader = response.body.getReader();
+          while (!abort.signal.aborted) {
+            const { done } = await reader.read();
+            if (done) break;
+          }
+        } catch {
+          if (abort.signal.aborted || disposed) return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 800));
+      }
+    };
+    void hold();
+    return () => {
+      disposed = true;
+      abort.abort();
+    };
+  }, [clientId, room?.id, room?.status, screen]);
 
   useEffect(() => {
     if (screen !== "chat" || !room || !clientId || room.status === "ended") return;

@@ -9,6 +9,7 @@ import {
   isValidEcdsaPublicKey,
 } from "@/lib/chat";
 import { getRoomSnapshot } from "@/lib/chat-server";
+import { countParticipantStreams } from "@/lib/chat-events";
 import { allowRequest } from "@/lib/rate-limit";
 import {
   abuseSessionCredential,
@@ -178,6 +179,7 @@ export async function POST(request: NextRequest) {
       .select({
         roomId: chatRooms.id,
         waitingClientId: chatParticipants.clientId,
+        lastSeenAt: chatParticipants.lastSeenAt,
       })
       .from(chatParticipants)
       .innerJoin(chatRooms, eq(chatParticipants.roomId, chatRooms.id))
@@ -190,8 +192,20 @@ export async function POST(request: NextRequest) {
         ),
       )
       .limit(1);
-    if (sessionWaiting && sessionWaiting.waitingClientId !== accessHash) {
-      // A second tab in this browser is already waiting. Pair them instead of
+    // A seat counts as a person only while its owner still holds the relay
+    // stream open. A tab that reloaded past its local key, or closed, leaves a
+    // row behind; joining that row would mark a room active with nobody in it.
+    const waitingSeatIsLive = Boolean(
+      sessionWaiting &&
+        now.getTime() - sessionWaiting.lastSeenAt.getTime() < 45_000 &&
+        countParticipantStreams(sessionWaiting.roomId, sessionWaiting.waitingClientId) > 0,
+    );
+    if (
+      sessionWaiting &&
+      waitingSeatIsLive &&
+      sessionWaiting.waitingClientId !== accessHash
+    ) {
+      // A second tab in this browser is still searching. Pair them instead of
       // killing the first search — otherwise a solo tester can never connect.
       await tx.insert(chatParticipants).values({
         roomId: sessionWaiting.roomId,
@@ -208,8 +222,8 @@ export async function POST(request: NextRequest) {
       return sessionWaiting.roomId;
     }
     if (sessionWaiting) {
-      // Same tab/credential reloading without the local key. Close the old
-      // waiting seat; never claim its participant credential.
+      // The same tab reloaded without its local key, or the seat outlived its
+      // owner. Close the old waiting seat; never claim its credential.
       await tx
         .update(chatParticipants)
         .set({ leftAt: now, lastSeenAt: now })

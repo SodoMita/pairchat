@@ -21,19 +21,34 @@ async function user(context) {
 
 const note = (name) => { passed.push(name); console.log('PASS', name); };
 const localChats = page => page.evaluate(() => JSON.parse(localStorage.getItem('luma-local-chats-v1') || '[]'));
+/**
+ * Poll with page.evaluate instead of waitForFunction: the app ships a strict
+ * CSP without 'unsafe-eval', and Playwright builds its waitForFunction polling
+ * loop with `new Function` inside the page.
+ */
+const waitUntil = async (probe, { timeout = 20_000, step = 150, label = 'condition' } = {}) => {
+  const deadline = Date.now() + timeout;
+  let last;
+  while (Date.now() < deadline) {
+    last = await probe();
+    if (last) return last;
+    await new Promise(resolve => setTimeout(resolve, step));
+  }
+  throw new Error(`Timed out waiting for ${label}`);
+};
 const waitForWaitingSeat = async page => {
-  await page.waitForFunction(() => {
-    const chats = JSON.parse(localStorage.getItem('luma-local-chats-v1') || '[]');
+  await waitUntil(async () => {
+    const chats = await localChats(page);
     return chats.some(chat => chat.status === 'waiting' && chat.encryption?.mode === 'ecdh');
-  }, null, { timeout: 15_000 });
+  }, { timeout: 15_000, label: 'a waiting seat with an ECDH key' });
   return (await localChats(page)).find(chat => chat.status === 'waiting');
 };
 const waitForComposer = async page => {
   await page.locator('textarea').waitFor({ timeout: 20_000 });
-  await page.waitForFunction(() => {
+  await waitUntil(() => page.evaluate(() => {
     const editor = document.querySelector('textarea');
-    return editor && !editor.disabled;
-  }, { timeout: 20_000 });
+    return Boolean(editor && !editor.disabled);
+  }), { timeout: 20_000, label: 'an enabled composer' });
 };
 const start = page => page.getByRole('button', { name: 'Chat with a stranger' }).click();
 const end = async page => {
@@ -54,25 +69,30 @@ try {
   const b = await user(ctxB);
   assert.equal(await a.locator('#safety-guide').count(), 1);
   assert.equal(await a.locator('label input[type=checkbox]').count(), 0, 'no fake consent gate');
-  assert.equal(await a.locator('#safety-guide ol > li').count(), 8, 'the eight common problems are visible');
+  assert.equal(await a.locator('#safety-guide article').count(), 8, 'all eight problems are visible');
   assert.equal(await a.locator('#safety-guide button, #safety-guide a, #safety-guide input, #safety-guide select, #safety-guide details, #safety-guide summary').count(), 0, 'the guide is plain, non-interactive HTML');
-  const topicTitles = await a.locator('#safety-guide ol > li > h3').allInnerTexts();
-  assert.match(topicTitles.join('\n'), /Swearing/i);
-  assert.match(await a.locator('#safety-guide ol > li').first().innerText(), /Why it happens/i);
-  assert.notEqual((await a.locator('#safety-guide ol > li').first().locator('p').first().innerText()).trim(), 'Why it happens');
-  note('Guide renders the common problems as static HTML without an entry checkbox');
+  const swearing = a.locator('#safety-guide article').nth(1);
+  assert.match(await swearing.locator('h3').innerText(), /Swearing/i);
+  assert.match(await swearing.locator('p').innerText(), /safety signal/i);
+  assert.match(await a.locator('#safety-guide article').first().locator('h3').innerText(), /disappears/i);
+  assert.match(await a.locator('#safety-guide article').last().locator('h3').innerText(), /search/i);
+  assert.ok((await a.locator('#safety-guide article').first().locator('p').innerText()).length > 120,
+    'each problem carries the full description');
+  note('Guide renders all eight problems as static HTML without an entry checkbox');
   for (const code of [
     'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ur', 'id',
     'de', 'ja', 'sw', 'mr', 'te', 'tr', 'ta', 'vi', 'ko',
   ]) {
     await a.locator('select').selectOption(code);
-    const whyLabel = await a.locator('#safety-guide ol > li').first().locator('strong').first().innerText();
-    assert.notEqual(whyLabel.replace(/[:：]\s*$/u, ''), 'Why it happens', `Guide label fell back to English for ${code}`);
+    const firstTitle = await a.locator('#safety-guide article').first().locator('h3').innerText();
+    const firstCopy = await a.locator('#safety-guide article').first().locator('p').innerText();
+    assert.notEqual(firstTitle, 'The other person disappears', `Guide title fell back to English for ${code}`);
+    assert.notEqual(firstCopy.slice(0, 20), 'A lot of chats end in', `Guide body fell back to English for ${code}`);
     assert.notEqual(await a.locator('#safety-guide h3').last().innerText(),
       'The patterns that follow', `Pattern heading fell back to English for ${code}`);
   }
   await a.locator('select').selectOption('en');
-  note('Safety guide headings are translated in all 19 non-English languages');
+  note('Common-problem titles and bodies are translated in all 19 non-English languages');
 
   const legacyCtx = await context();
   const legacyPage = await user(legacyCtx);
@@ -185,8 +205,9 @@ try {
   await end(lost);
   await lostCtx.close(); await peerCtx.close();
 
-  // Two tabs in the same browser should resume one waiting seat. They must
-  // not match each other or endlessly steal and recreate the same queue.
+  // Two tabs of one browser resume a single waiting seat rather than queueing
+  // twice, and a stranger connects to that seat. A seat whose owner is gone is
+  // never joined: that would open a room with nobody in it.
   const sharedCtx = await context();
   const otherCtx = await context();
   const sharedA = await user(sharedCtx);
@@ -249,12 +270,14 @@ try {
   const owner = await user(ownerCtx);
   await owner.getByRole('button', { name: 'Create private link' }).click();
   await owner.getByRole('button', { name: /Copy invite link/ }).waitFor({ timeout: 10_000 });
-  const invite = await owner.evaluate(() => {
+  await owner.waitForLoadState('domcontentloaded');
+  // Creating the link navigates; evaluate only after the new page has settled.
+  const invite = await waitUntil(() => owner.evaluate(() => {
     const chats = JSON.parse(localStorage.getItem('luma-local-chats-v1') || '[]');
     const own = chats.find(chat => chat.kind === 'private' && chat.encryption?.mode === 'private');
     if (!own) throw new Error('Private invite key was not saved');
     return `/r/${own.roomId}#k=${own.encryption.secret}`;
-  });
+  }).catch(() => null), { timeout: 15_000, label: 'a saved private invite key' });
   const visitor = await visitorCtx.newPage();
   await visitor.goto(new URL(invite, BASE).href, { waitUntil: 'domcontentloaded' });
   await Promise.all([waitForComposer(owner), waitForComposer(visitor)]);

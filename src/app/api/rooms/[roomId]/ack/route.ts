@@ -28,7 +28,10 @@ export async function POST(
   if (!isTrustedJsonMutation(request)) {
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
-  if (!allowRequest(`ack:${requestClientAddress(request)}`, 120, 60_000)) {
+  const ackIdentity = hashAccessCredential(
+    bearerCredential(request) ?? requestClientAddress(request),
+  );
+  if (!allowRequest(`ack:${ackIdentity}`, 120, 60_000)) {
     return NextResponse.json({ error: "Too many acknowledgement requests." }, { status: 429 });
   }
 

@@ -15,7 +15,10 @@ export async function POST(
   if (!isTrustedJsonMutation(request)) {
     return NextResponse.json({ error: "Untrusted request." }, { status: 403 });
   }
-  if (!allowRequest(`signing-key:${requestClientAddress(request)}`, 30, 60_000)) {
+  const keyIdentity = hashAccessCredential(
+    bearerCredential(request) ?? requestClientAddress(request),
+  );
+  if (!allowRequest(`signing-key:${keyIdentity}`, 30, 60_000)) {
     return NextResponse.json({ error: "Too many key requests." }, { status: 429 });
   }
 
