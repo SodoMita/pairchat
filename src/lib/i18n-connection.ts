@@ -29,6 +29,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "清空全板",
     canvasResetAsk: "对方请求清空整块画板。",
     canvasResetApprove: "全部清空",
+    agentChannel: "AI 代理频道",
   },
   hi: {
     queueExplanation: "आप कतार में हैं। चैट तभी शुरू होगी जब कोई दूसरा व्यक्ति भी खोज रहा हो; यहाँ और कोई न हो तो समय लग सकता है।",
@@ -57,6 +58,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "बोर्ड रीसेट",
     canvasResetAsk: "उन्होंने पूरा बोर्ड साफ़ करने को कहा है।",
     canvasResetApprove: "सब साफ़ करें",
+    agentChannel: "एजेंट चैनल",
   },
   es: {
     queueExplanation: "Estás en la cola. La charla empieza solo cuando otra persona también busca; puede tardar si no hay nadie más.",
@@ -85,6 +87,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Reiniciar pizarra",
     canvasResetAsk: "Pidieron borrar toda la pizarra.",
     canvasResetApprove: "Borrar todo",
+    agentChannel: "Canal de agentes",
   },
   fr: {
     queueExplanation: "Vous êtes dans la file. Le chat commence seulement lorsqu’une autre personne cherche aussi ; l’attente peut être longue si personne n’est là.",
@@ -113,6 +116,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Réinitialiser",
     canvasResetAsk: "Demande d’effacer tout le tableau.",
     canvasResetApprove: "Tout effacer",
+    agentChannel: "Canal d’agents",
   },
   ar: {
     queueExplanation: "أنت في قائمة الانتظار. تبدأ المحادثة فقط عندما يبحث شخص آخر أيضًا؛ قد يستغرق الأمر وقتًا إن لم يكن أحد هنا.",
@@ -141,6 +145,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "إعادة ضبط اللوحة",
     canvasResetAsk: "طلب الطرف الآخر مسح اللوحة كاملة.",
     canvasResetApprove: "مسح الكل",
+    agentChannel: "قناة الوكلاء",
   },
   bn: {
     queueExplanation: "আপনি অপেক্ষার সারিতে আছেন। অন্য কেউ খুঁজলেই চ্যাট শুরু হবে; এখন কেউ না থাকলে কিছু সময় লাগতে পারে।",
@@ -169,6 +174,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "বোর্ড রিসেট",
     canvasResetAsk: "তিনি পুরো বোর্ড মুছতে চেয়েছেন।",
     canvasResetApprove: "সব মুছুন",
+    agentChannel: "এজেন্ট চ্যানেল",
   },
   pt: {
     queueExplanation: "Você está na fila. A conversa só começa quando outra pessoa também está procurando; pode demorar se não houver ninguém aqui.",
@@ -197,6 +203,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Limpar quadro",
     canvasResetAsk: "Pediram para limpar todo o quadro.",
     canvasResetApprove: "Limpar tudo",
+    agentChannel: "Canal de agentes",
   },
   ru: {
     queueExplanation: "Вы в очереди. Чат начнётся, только когда другой человек тоже будет искать собеседника; если никого нет, придётся подождать.",
@@ -225,6 +232,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Сбросить доску",
     canvasResetAsk: "Собеседник просит очистить весь холст.",
     canvasResetApprove: "Очистить всё",
+    agentChannel: "Канал агентов",
   },
   ur: {
     queueExplanation: "آپ انتظار کی قطار میں ہیں۔ چیٹ تبھی شروع ہوگی جب کوئی اور بھی تلاش کر رہا ہو؛ اگر یہاں کوئی نہیں تو وقت لگ سکتا ہے۔",
@@ -253,6 +261,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "بورڈ صاف کریں",
     canvasResetAsk: "انہوں نے پورا بورڈ صاف کرنے کی درخواست کی ہے۔",
     canvasResetApprove: "سب صاف کریں",
+    agentChannel: "ایجینٹ چینل",
   },
   id: {
     queueExplanation: "Kamu sedang mengantre. Obrolan dimulai hanya saat ada orang lain yang juga mencari; bisa lama jika belum ada orang di sini.",
@@ -281,6 +290,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Atur ulang papan",
     canvasResetAsk: "Mereka meminta menghapus seluruh papan.",
     canvasResetApprove: "Hapus semua",
+    agentChannel: "Kanal agen",
   },
   de: {
     queueExplanation: "Du bist in der Warteschlange. Der Chat beginnt erst, wenn noch jemand sucht; wenn niemand da ist, kann es dauern.",
@@ -309,6 +319,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Tafel leeren",
     canvasResetAsk: "Anfrage zum Leeren der ganzen Tafel.",
     canvasResetApprove: "Alles leeren",
+    agentChannel: "Agenten-Kanal",
   },
   ja: {
     queueExplanation: "待機中です。ほかの人も相手を探しているときにだけチャットが始まります。今誰もいなければ時間がかかる場合があります。",
@@ -337,6 +348,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "ボードをリセット",
     canvasResetAsk: "相手がボード全体の消去を求めました。",
     canvasResetApprove: "すべて消去",
+    agentChannel: "エージェント用",
   },
   sw: {
     queueExplanation: "Uko kwenye foleni. Gumzo huanza tu mtu mwingine akitafuta pia; linaweza kuchelewa kama hakuna mwingine hapa.",
@@ -365,6 +377,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Safisha ubao",
     canvasResetAsk: "Wameomba kufuta ubao mzima.",
     canvasResetApprove: "Futa yote",
+    agentChannel: "Kituo cha mawakala",
   },
   mr: {
     queueExplanation: "तुम्ही प्रतीक्षेत आहात. दुसरी व्यक्तीही शोधत असेल तरच चॅट सुरू होईल; इथे कोणी नसेल तर वेळ लागू शकतो.",
@@ -393,6 +406,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "फलक रीसेट",
     canvasResetAsk: "त्यांनी संपूर्ण फलक पुसण्याची विनंती केली आहे.",
     canvasResetApprove: "सर्व पुसा",
+    agentChannel: "एजंट चॅनेल",
   },
   te: {
     queueExplanation: "మీరు క్యూలో ఉన్నారు. మరొకరు కూడా వెతుకుతున్నప్పుడే చాట్ ప్రారంభమవుతుంది; ఇక్కడ మరెవరూ లేకపోతే సమయం పట్టవచ్చు.",
@@ -421,6 +435,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "బోర్డు రీసెట్",
     canvasResetAsk: "మొత్తం బోర్డు చెరపమని అడిగారు.",
     canvasResetApprove: "అన్నీ చెరుపు",
+    agentChannel: "ఏజెంట్ ఛానెల్",
   },
   tr: {
     queueExplanation: "Sıradasın. Sohbet yalnızca başka biri de arıyorsa başlar; burada başka kimse yoksa biraz sürebilir.",
@@ -449,6 +464,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Tahtayı sıfırla",
     canvasResetAsk: "Tüm tahtayı temizlemek istiyor.",
     canvasResetApprove: "Tümünü sil",
+    agentChannel: "Ajan kanalı",
   },
   ta: {
     queueExplanation: "நீங்கள் வரிசையில் உள்ளீர்கள். வேறொருவரும் தேடும்போதுதான் அரட்டை தொடங்கும்; இப்போது யாரும் இல்லாவிட்டால் சிறிது நேரம் ஆகலாம்.",
@@ -477,6 +493,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "பலகை மீட்டமை",
     canvasResetAsk: "முழுப் பலகையையும் அழிக்கக் கேட்டார்.",
     canvasResetApprove: "அனைத்தும் அழி",
+    agentChannel: "முகவர் தளம்",
   },
   vi: {
     queueExplanation: "Bạn đang trong hàng chờ. Chỉ khi người khác cũng đang tìm thì trò chuyện mới bắt đầu; có thể mất thời gian nếu chưa có ai ở đây.",
@@ -505,6 +522,7 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "Đặt lại bảng",
     canvasResetAsk: "Họ đề nghị xóa toàn bộ bảng vẽ.",
     canvasResetApprove: "Xóa tất cả",
+    agentChannel: "Kênh tác tử",
   },
   ko: {
     queueExplanation: "대기 중입니다. 다른 사람도 찾고 있을 때만 채팅이 시작됩니다. 지금 아무도 없으면 시간이 걸릴 수 있어요.",
@@ -533,5 +551,6 @@ export const connectionTranslations: Partial<Record<LanguageCode, Dictionary>> =
     canvasReset: "보드 초기화",
     canvasResetAsk: "상대방이 전체 보드 지우기를 요청했습니다.",
     canvasResetApprove: "모두 지우기",
+    agentChannel: "에이전트 채널",
   },
 };

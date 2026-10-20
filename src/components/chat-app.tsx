@@ -62,6 +62,7 @@ import {
   ArrowRight,
   Ban,
   BookOpen,
+  Bot,
   Bookmark,
   BookmarkCheck,
   Check,
@@ -263,6 +264,10 @@ function Header({
             <a className="transition hover:text-[#1e2927]" href="#how-it-works">{t("howItWorks")}</a>
             <a className="transition hover:text-[#1e2927]" href="#safety-guide">{t("guideNav")}</a>
             <a className="transition hover:text-[#1e2927]" href="#safety">{t("safety")}</a>
+            <Link className="inline-flex items-center gap-1.5 transition hover:text-[#1e2927]" href="/agent">
+              <Bot size={13} className="text-[#ff6747]" />
+              {t("agentChannel")}
+            </Link>
             <span className="flex items-center gap-2 rounded-full border border-[#dfe2db] bg-white/70 px-3.5 py-2 text-[11px] text-[#3f4946]">
               <MessageCircle size={13} className="text-[#6c9161]" />
               {t("textOnly")}
@@ -511,11 +516,12 @@ function HomeScreen({
               <p role="status" className="mt-3 max-w-[530px] rounded-xl border border-[#e5dfd0] bg-[#faf7ec] px-4 py-3 text-[11px] leading-5 text-[#75664d]">{t("storageEphemeral")}</p>
             )}
             <a href="#safety-guide" className="mt-6 inline-flex items-center gap-2 rounded-xl text-[11px] font-bold text-[#6c7a70] underline decoration-[#f2b7a5] decoration-2 underline-offset-4 hover:text-[#c65338]"><ShieldCheck size={15} /> {t("guideNav")} <ChevronRight size={13} className="rtl:rotate-180" /></a>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <button onClick={onRandom} disabled={busy} className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-[#ff6747] px-7 text-[14px] font-extrabold text-white shadow-[0_12px_28px_rgba(255,103,71,0.24)] transition hover:-translate-y-0.5 hover:bg-[#f65c3d] disabled:opacity-60">
                 {busy ? <LoaderCircle size={18} className="animate-spin" /> : <Shuffle size={18} />}{t("chatStranger")}<ArrowRight size={17} className="transition-transform group-hover:translate-x-1 rtl:rotate-180" />
               </button>
               <button onClick={onPrivate} disabled={busy} className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-2xl border border-[#d9ddd5] bg-white/75 px-6 text-[14px] font-extrabold text-[#394340] transition hover:-translate-y-0.5 hover:border-[#c9cec5] hover:bg-white disabled:opacity-60"><Link2 size={17} /> {t("createPrivate")}</button>
+              <Link href="/agent" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-[#d9ddd5] bg-white/75 px-5 text-[14px] font-extrabold text-[#394340] transition hover:-translate-y-0.5 hover:border-[#c9cec5] hover:bg-white"><Bot size={17} className="text-[#ff6747]" /> {t("agentChannel")}</Link>
             </div>
             <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-semibold text-[#8a918e]">
               <span className="flex items-center gap-1.5"><Check size={13} className="text-[#72a961]" /> {t("anonymousDesign")}</span>

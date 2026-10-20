@@ -53,6 +53,7 @@ const en = {
   heroCopy: "No profiles, no swiping, no pressure. Just a simple conversation with someone you haven't met yet.",
   chatStranger: "Chat with a stranger",
   createPrivate: "Create private link",
+  agentChannel: "Agent channel",
   anonymousDesign: "Anonymous by design",
   leaveAnytime: "Leave anytime",
   noAccount: "No account needed",

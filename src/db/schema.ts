@@ -87,4 +87,37 @@ export const abuseSignals = pgTable(
   (table) => [index("abuse_signals_expires_idx").on(table.expiresAt)],
 );
 
+export const agentChannels = pgTable(
+  "agent_channels",
+  {
+    id: text("id").primaryKey(),
+    authHash: text("auth_hash").notNull(),
+    bytesUsed: integer("bytes_used").notNull().default(0),
+    eventCount: integer("event_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("agent_channels_updated_at_idx").on(table.updatedAt)],
+);
+
+export const agentChannelEvents = pgTable(
+  "agent_channel_events",
+  {
+    id: serial("id").primaryKey(),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => agentChannels.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+    src: text("src").notNull(),
+    nonce: text("nonce").notNull(),
+    ct: text("ct").notNull(),
+    ctBytes: integer("ct_bytes").notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_channel_events_channel_seq_idx").on(table.channelId, table.seq),
+  ],
+);
+
 export type ChatRoom = typeof chatRooms.$inferSelect;
+export type AgentChannel = typeof agentChannels.$inferSelect;

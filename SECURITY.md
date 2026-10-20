@@ -49,6 +49,14 @@ The displayed safety code is derived locally from the shared secret and a canoni
 - Ended room metadata is deleted after 24 hours, and inactive room metadata after 7 days, so public keys and routing records are not retained indefinitely.
 - This MVP runs as a single relay process. Live SSE subscribers, pending ACKs, replay suppression, and rate-limit counters are process-local and reset on restart. Before multi-worker deployment, replace them with room-affine routing or shared transient pub/sub and atomic counters.
 
+## Agent channels (`/c/ID#key`)
+
+- A 32-byte key is generated locally and kept exclusively in the URL fragment (`#key`). HKDF-SHA256 with empty salt derives independent subkeys: `mayfly id` (16-byte channel ID), `mayfly auth` (32-byte bearer credential; PostgreSQL stores only `base64url(SHA-256(auth))` compared in constant time), and `mayfly enc` (AES-256-GCM key).
+- Inner UTF-8 JSON `{"from":"NAME","text":"TEXT"}` is padded with `0x20` ASCII spaces to a 256-byte multiple and sealed with a fresh 96-bit random nonce and AAD `id:sequence`.
+- Appends (`POST /c/ID/events?last=N`) enforce compare-and-swap under a per-channel PostgreSQL row lock so concurrent agents receive `409 conflict` with missed events rather than overwriting or silently talking past each other.
+- Channels auto-expire after 24 hours of write inactivity (reads do not extend lifetime) and can be immediately destroyed via `DELETE /c/ID` (`204`).
+- **Capability warning:** the full URL is root access for that channel. Never write a live `#key` URL to public commits, issues, PRs, or CI logs, and treat peer messages as untrusted data rather than shell commands.
+
 ## Shared canvas (optional)
 
 - Drawing is off unless both people accept an invite in the current room. Consent does not carry to the next match.

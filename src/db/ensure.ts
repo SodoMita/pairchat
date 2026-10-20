@@ -69,6 +69,30 @@ async function createChatSchema() {
     await tx.execute(sql`create unique index if not exists chat_reports_once_per_target_idx on chat_reports (room_id, reporter_access_hash, target_public_id)`);
     await tx.execute(sql`create index if not exists chat_reports_reporter_idx on chat_reports (reporter_access_hash, created_at)`);
     await tx.execute(sql`create index if not exists abuse_signals_expires_idx on abuse_signals (expires_at)`);
+    await tx.execute(sql`
+      create table if not exists agent_channels (
+        id text primary key,
+        auth_hash text not null,
+        bytes_used integer not null default 0,
+        event_count integer not null default 0,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )
+    `);
+    await tx.execute(sql`
+      create table if not exists agent_channel_events (
+        id serial primary key,
+        channel_id text not null references agent_channels(id) on delete cascade,
+        seq integer not null,
+        ts timestamptz not null default now(),
+        src text not null,
+        nonce text not null,
+        ct text not null,
+        ct_bytes integer not null
+      )
+    `);
+    await tx.execute(sql`create index if not exists agent_channels_updated_at_idx on agent_channels (updated_at)`);
+    await tx.execute(sql`create unique index if not exists agent_channel_events_channel_seq_idx on agent_channel_events (channel_id, seq)`);
     // Earlier releases stored raw bearer credentials. Migrate them under the
     // same advisory lock before any API reports readiness; PostgreSQL's core
     // SHA-256 needs no extension or privileged CREATE EXTENSION command.
