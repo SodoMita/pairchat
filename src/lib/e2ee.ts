@@ -350,6 +350,34 @@ export async function getRoomCryptoKey(
   return deriveRandomRoomKey(encryption, room);
 }
 
+export async function getCanvasCryptoKey(
+  encryption: ConversationEncryption | undefined,
+  room: Pick<RoomSnapshot, "id" | "partnerPublicKey">,
+) {
+  if (!encryption) throw new Error("No local encryption key for this chat");
+  const keyMaterial = encryption.mode === "private"
+    ? await crypto.subtle.importKey("raw", fromBase64Url(encryption.secret), "HKDF", false, ["deriveKey"])
+    : await crypto.subtle.importKey(
+        "raw",
+        await deriveRandomRoomBits(encryption, room.partnerPublicKey),
+        "HKDF",
+        false,
+        ["deriveKey"],
+      );
+  return crypto.subtle.deriveKey(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: encoder.encode(room.id),
+      info: encoder.encode("pairchat/canvas/v1"),
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
 export async function getRoomSafetyCode(
   encryption: ConversationEncryption | undefined,
   room: Pick<RoomSnapshot, "id" | "partnerPublicKey" | "partnerSigningKey">,

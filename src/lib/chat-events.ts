@@ -1,3 +1,5 @@
+import type { CanvasEnvelope } from "@/lib/canvas";
+
 export type EncryptedMessageEnvelope = {
   version: 1;
   id: string;
@@ -26,7 +28,8 @@ export type LiveChatEvent =
       recipientPublicId: string;
       readAt: string;
       signature: string;
-    };
+    }
+  | { type: "canvas"; envelope: CanvasEnvelope };
 
 type PendingDelivery = { senderAccessHash: string; recipientAccessHash: string; expiresAt: number };
 type PendingDeliveries = Map<string, Map<string, PendingDelivery>>;
@@ -118,6 +121,24 @@ export function acknowledgeChatMessage(
 
 export function countParticipantStreams(roomId: string, clientId: string) {
   return registry.get(roomId)?.get(clientId)?.size ?? 0;
+}
+
+export function publishCanvasEvent(
+  roomId: string,
+  senderAccessHash: string,
+  envelope: CanvasEnvelope,
+) {
+  const participants = registry.get(roomId);
+  if (!participants) return false;
+  let delivered = false;
+  for (const [clientId, listeners] of participants) {
+    if (clientId === senderAccessHash) continue;
+    for (const listener of listeners) {
+      listener({ type: "canvas", envelope });
+      delivered = true;
+    }
+  }
+  return delivered;
 }
 
 export function publishReadReceipt(

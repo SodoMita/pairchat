@@ -1,7 +1,9 @@
 "use client";
 
 import { isValidRoomId, type RoomSnapshot } from "@/lib/chat";
+import { isCanvasEnvelope, type CanvasEnvelope } from "@/lib/canvas";
 import type { EncryptedMessageEnvelope } from "@/lib/chat-events";
+import ChatCanvas from "@/components/chat-canvas";
 import { isClientAdmissionChallenge, solveAdmissionChallenge } from "@/lib/admission-client";
 import {
   createEcdhCredentials,
@@ -739,6 +741,8 @@ function ChatScreen({
   onDismissNotice,
   soundEnabled,
   onToggleSound,
+  canvasEnabled,
+  canvasIncoming,
 }: {
   room: RoomSnapshot;
   clientId: string;
@@ -770,6 +774,8 @@ function ChatScreen({
   onLeave: () => void;
   onNext: () => void;
   onReadIncoming: (messageId: string) => void;
+  canvasEnabled: boolean;
+  canvasIncoming: CanvasEnvelope | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -930,9 +936,18 @@ function ChatScreen({
                 {room.kind === "random" && !ended && <button onClick={onToggleRememberRandom} className={`inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[10px] font-extrabold transition ${rememberRandomHistory ? "border-[#cfe1c8] bg-[#edf5e9] text-[#57774e]" : "border-[#e1e3dd] text-[#59635f] hover:bg-[#f7f7f3]"}`} title={t("rememberRandom")}><span>{rememberRandomHistory ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}</span><span className="hidden xl:inline">{t("rememberRandom")}</span></button>}
                 {room.kind === "private" && !ended && <button onClick={onCopy} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3] sm:px-4">{copied ? <Check size={14} className="text-[#6ca45e]" /> : <Copy size={14} />}<span className="hidden sm:inline">{copied ? t("copied") : t("inviteLink")}</span></button>}
                 {room.kind === "random" && !waiting && !ended && <button onClick={() => setConfirmAction("next")} aria-label={t("next")} className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#e1e3dd] px-3 text-[10px] font-extrabold text-[#59635f] transition hover:bg-[#f7f7f3]"><Shuffle size={14} /><span className="hidden sm:inline">{t("next")}</span></button>}
-                <button onClick={() => ended ? onLeave() : setConfirmAction("leave")} className="grid h-9 w-9 place-items-center rounded-xl text-[#929995] transition hover:bg-[#fff0ec] hover:text-[#e76145]" aria-label={t("leaveChat")}><LogOut size={16} /></button>
-              </div>
-            </div>
+                 <button onClick={() => ended ? onLeave() : setConfirmAction("leave")} className="grid h-9 w-9 place-items-center rounded-xl text-[#929995] transition hover:bg-[#fff0ec] hover:text-[#e76145]" aria-label={t("leaveChat")}><LogOut size={16} /></button>
+               </div>
+             </div>
+
+            {canvasEnabled && !waiting && !ended && secureReady && (
+              <ChatCanvas
+                room={room}
+                encryption={conversations.find((item) => item.roomId === room.id)?.encryption}
+                incoming={canvasIncoming}
+                t={t}
+              />
+            )}
 
             {!waiting && !ended && partnerUnavailable && (
               <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#f0c0ae] bg-[#fff1e9] px-4 py-3 text-[11px] font-semibold text-[#a23c22] sm:px-6">
@@ -1116,11 +1131,28 @@ export default function ChatApp() {
   const typingTimer = useRef<number | undefined>(undefined);
   const lastTypingSignal = useRef(0);
   const reportedReads = useRef(new Set<string>());
+  const [canvasEnabled, setCanvasEnabled] = useState(false);
+  const [canvasIncoming, setCanvasIncoming] = useState<CanvasEnvelope | null>(null);
   const t = useCallback((key: TranslationKey) => translate(language, key), [language]);
 
   useEffect(() => {
     setSoundOn(isSoundEnabled());
     return installSoundUnlock();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/canvas", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: { enabled?: boolean }) => {
+        if (!cancelled) setCanvasEnabled(payload.enabled === true);
+      })
+      .catch(() => {
+        if (!cancelled) setCanvasEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1289,6 +1321,7 @@ export default function ChatApp() {
   ) => {
     if (!nextRoom) return;
     reportedReads.current = new Set();
+    setCanvasIncoming(null);
     setClientId(participantId);
     const nextConversations = saveLocalRoom(nextRoom, participantId, encryption);
     const local = nextConversations.find((item) => item.roomId === nextRoom.id);
@@ -1806,6 +1839,14 @@ export default function ChatApp() {
           // Ignore malformed ephemeral typing events.
         }
       }
+      if (eventType === "canvas") {
+        try {
+          const envelope = JSON.parse(payload) as unknown;
+          if (isCanvasEnvelope(envelope)) setCanvasIncoming(envelope);
+        } catch {
+          // Ignore malformed canvas frames.
+        }
+      }
       if (eventType === "ended") {
         setPartnerTyping(false);
         setRoom((current) =>
@@ -2197,7 +2238,7 @@ export default function ChatApp() {
   if (screen === "matching") return <MatchingScreen onCancel={() => void cancelSearch()} onPrivate={() => void privateFromQueue()} starting={busy} matchNotice={homeNotice} conversations={conversations} currentRoomId={room?.id} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} />;
 
   if (screen === "chat" && room) {
-    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} onReadIncoming={(messageId) => void sendReadReceipt(messageId)} />;
+    return <ChatScreen key={room.id} room={room} clientId={clientId} messages={messages} draft={draft} sending={sending} copied={copied} relayReady={relayReady} safetyCode={safetyCode} partnerTyping={partnerTyping} notice={notice} onDismissNotice={() => setNotice("")} soundEnabled={soundOn} onToggleSound={toggleSound} rememberRandomHistory={Boolean(conversations.find((conversation) => conversation.roomId === room.id)?.rememberRandomHistory)} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} onToggleRememberRandom={toggleRememberRandom} onReport={reportStranger} onDraft={updateDraft} onSend={sendMessage} onKeyDown={handleKeyDown} onCopy={copyInvite} onPause={pauseRoom} onLeave={() => void leaveRoom(true)} onNext={() => void nextChat()} onReadIncoming={(messageId) => void sendReadReceipt(messageId)} canvasEnabled={canvasEnabled} canvasIncoming={canvasIncoming} />;
   }
 
   return <HomeScreen onRandom={() => void startRandom()} onPrivate={() => void createPrivate()} busy={busy || !storageReady || !abuseSession} serviceStatus={serviceStatus} conversations={conversations} t={t} language={language} onLanguage={changeLanguage} onOpenChat={openLocalChat} onDeleteHistory={deleteHistory} soundEnabled={soundOn} onToggleSound={toggleSound} homeNotice={homeNotice} onDismissNotice={() => setHomeNotice(null)} storagePersistent={storagePersistent} />;

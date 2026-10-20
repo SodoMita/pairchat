@@ -49,6 +49,14 @@ The displayed safety code is derived locally from the shared secret and a canoni
 - Ended room metadata is deleted after 24 hours, and inactive room metadata after 7 days, so public keys and routing records are not retained indefinitely.
 - This MVP runs as a single relay process. Live SSE subscribers, pending ACKs, replay suppression, and rate-limit counters are process-local and reset on restart. Before multi-worker deployment, replace them with room-affine routing or shared transient pub/sub and atomic counters.
 
+## Shared canvas (optional)
+
+- Drawing is off unless both people accept an invite in the current room. Consent does not carry to the next match.
+- Stroke coordinates, colors, and brush size are encrypted with AES-256-GCM using a key derived by HKDF with info `pairchat/canvas/v1`, separate from the chat-message key. Envelopes are ECDSA-signed. The relay only sees event type, sequence, session id, board generation, and ciphertext length.
+- Hide keeps applying updates locally without showing the board. Disable drops the session and ignores further events until a new invite is accepted.
+- Drawings are not stored. A reload or a new match starts with a blank board and requires a new invite.
+- Set `CANVAS_ENABLED=false` to reject new canvas sessions without taking text chat offline. Budgets: 40 events / 10s / participant, 48 points per stroke, 80 retained strokes per layer.
+
 ## Metadata visible to the server
 
 The server can observe room IDs and type, participant capability IDs, public ECDH/ECDSA keys, a one-way SHA-256 commitment for private invite verification, connection times, presence, message timing, sender, and ciphertext length. It cannot passively recover message plaintext or the 256-bit invite secret from these values.

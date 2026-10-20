@@ -78,12 +78,14 @@ export async function GET(
                           readAt: event.readAt,
                           signature: event.signature,
                         }
-                      : {
-                          messageId: event.messageId,
-                          recipientPublicId: event.recipientPublicId,
-                          receivedAt: event.receivedAt,
-                          signature: event.signature,
-                        };
+                      : event.type === "canvas"
+                        ? event.envelope
+                        : {
+                            messageId: event.messageId,
+                            recipientPublicId: event.recipientPublicId,
+                            receivedAt: event.receivedAt,
+                            signature: event.signature,
+                          };
           const id = event.type === "message" ? `id: ${event.message.id}\n` : "";
           controller.enqueue(
             encoder.encode(
