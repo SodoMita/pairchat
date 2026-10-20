@@ -548,33 +548,42 @@ function HomeScreen({
           <ol className="mt-10 max-w-[40rem] list-none space-y-10 p-0">
             {allGuideTopics.map((topic, index) => {
               const explicit = topic.copy.split(/\n\n+/).map((part) => part.trim()).filter(Boolean);
-              const paragraphs = explicit.length > 1 ? explicit : (() => {
+              const packed = explicit.length > 1 ? explicit : (() => {
                 const sentences = topic.copy.match(/[^.!?।॥。！？؟]+[.!?।॥。！？؟]*\s*/gu) ?? [topic.copy];
-                const packed: string[] = [];
+                const parts: string[] = [];
                 let current = "";
                 for (const raw of sentences) {
                   const sentence = raw.trim();
                   if (!sentence) continue;
                   const joined = current ? `${current} ${sentence}` : sentence;
                   if (current && joined.length > 180) {
-                    packed.push(current);
+                    parts.push(current);
                     current = sentence;
                   } else {
                     current = joined;
                   }
                 }
-                if (current) packed.push(current);
-                return packed;
+                if (current) parts.push(current);
+                return parts;
               })();
+              const why = packed[0] ?? topic.copy;
+              const know = packed.length > 1 ? packed[packed.length - 1] : why;
+              const consequence = packed.length > 2 ? packed.slice(1, -1).join(" ") : packed[1] ?? why;
+              const labeled = [
+                [t("guideWhyLabel"), why],
+                [t("guideConsequenceLabel"), consequence],
+                [t("guideReasoningLabel"), know],
+              ] as const;
               return (
                 <li key={topic.title}>
                   <h3 className="text-[1.2rem] font-extrabold leading-snug tracking-[-0.02em] text-[#23302c]">
                     <span className="me-2 text-[#c96a54]">{index + 1}.</span>
                     {topic.title}
                   </h3>
-                  {paragraphs.map((paragraph) => (
-                    <p key={paragraph.slice(0, 32)} className="mt-3 text-[17px] leading-[1.75] text-[#44524c]">
-                      {paragraph}
+                  {labeled.map(([label, body]) => (
+                    <p key={label} className="mt-3 text-[17px] leading-[1.75] text-[#44524c]">
+                      <strong className="font-extrabold text-[#27322f]">{label}. </strong>
+                      {body}
                     </p>
                   ))}
                 </li>
